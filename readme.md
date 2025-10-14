@@ -5,8 +5,14 @@ https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
 ## run
 
-need [babashka](https://book.babashka.org/#getting_started)
+either use [babashka](https://book.babashka.org/#getting_started)
 
 ```
 bb -m raytracing
+```
+
+or clojure
+
+```
+clojure -M:main
 ```

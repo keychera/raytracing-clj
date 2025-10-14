@@ -1,1 +1,1 @@
-{:paths ["src"]}
+{:deps {io.github.keychera/raytracing-clj {:local/root "."}}}

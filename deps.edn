@@ -1,0 +1,2 @@
+{:paths ["src"]
+ :aliases {:main {:main-opts ["-m" "raytracing"]}}}
