@@ -7,7 +7,9 @@
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
-(defn write-color! [out color]
+(set! *warn-on-reflection* true)
+
+(defn write-color! [^java.io.BufferedWriter out color]
   (let [[r g b] (mapv #(int (* 255 %)) color)]
     (.write out (str r " " g " " b "\n"))))
 
