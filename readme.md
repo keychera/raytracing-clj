@@ -3,5 +3,10 @@
 https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
 
+## run
 
-bb raytracing.clj
+need [babashka](https://book.babashka.org/#getting_started)
+
+```
+bb -m raytracing
+```
