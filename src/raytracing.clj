@@ -1,8 +1,8 @@
 (ns raytracing
   (:require
    [clojure.java.io :as io]
-   [ray :as ray]
-   ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
+   [models :refer [sphere]]
+   [ray :as ray] ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
    [vec3]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
@@ -43,7 +43,7 @@
                                   (vec3/add (vec3/multiply pixel-dv j)))
                 ray-direction (vec3/subtract pixel-center camera-center)
                 a-ray         #::ray{:origin camera-center :direction ray-direction}
-                color         (ray/color a-ray)]
+                color         (ray/color a-ray (sphere [0 0 -1] 0.5))]
             (write-color! out color)))))
      :done)))
 
