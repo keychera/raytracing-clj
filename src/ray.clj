@@ -9,12 +9,12 @@
 
 (defn hit-sphere [{::keys [origin direction]} center radius]
   (let [oc (vec3/subtract center origin)
-        a  (vec3/dot direction direction)
-        b  (* (vec3/dot direction oc) -2.0)
-        c  (- (vec3/dot oc oc) (* radius radius))
-        discriminant (- (* b b) (* 4 a c))]
+        a  (vec3/length-squared direction)
+        h  (vec3/dot direction oc)
+        c  (- (vec3/length-squared direction) (* radius radius))
+        discriminant (- (* h h) (* a c))]
     (when (>= discriminant 0)
-      (/ (- 0 b (Math/sqrt discriminant)) (* 2.0 a)))))
+      (/ (- h (Math/sqrt discriminant)) a))))
 
 (defn color [{::keys [direction] :as ray}]
   (if-let [t (hit-sphere ray [0 0 -1] 0.5)]
