@@ -16,7 +16,7 @@
 
 (def hittables
   [(sphere [0 0 -1] 0.5)
-   (sphere [1 0.2 -0.9] 0.5)])
+   (sphere [0 -100.5 -1] 100)])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
@@ -32,9 +32,8 @@
 
 (defn color [{::ray/keys [direction] :as ray} bodies]
   (if-let [hit-record (hit-anything ray bodies 0 10)]
-    (let [t          (::body/t hit-record)
-          [nx ny nz] (vec3/unit (vec3/subtract (ray/at ray t) [0 0 -1]))]
-      (vec3/multiply [(inc nx) (inc ny) (inc nz)] 0.5))
+    (let [normal (::body/normal hit-record)]
+      (vec3/multiply (vec3/add normal [1 1 1]) 0.5))
     (let [[_x y _z] (vec3/unit direction)
           a         (* 0.5 (+ y 1.0))]
       (vec3/add (vec3/multiply [1.0 1.0 1.0] (- 1.0 a))
