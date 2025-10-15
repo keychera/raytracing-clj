@@ -21,6 +21,6 @@
                           root'))]
            (if (or (<= root t-min) (<= t-max root))
              nil
-             (let [point  (ray/at the-ray root)
-                   normal (vec3/divide (vec3/subtract point center) radius)]
-               (body/hit-record point normal root)))))))})
+             (let [point          (ray/at the-ray root)
+                   outward-normal (vec3/divide (vec3/subtract point center) radius)]
+               (body/hit-record the-ray point outward-normal root)))))))})

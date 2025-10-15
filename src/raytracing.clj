@@ -1,5 +1,6 @@
 (ns raytracing
   (:require
+   [body :as body]
    [clojure.java.io :as io]
    [models :refer [sphere]]
    [ray :as ray] ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
@@ -12,6 +13,16 @@
 (defn write-color! [^java.io.BufferedWriter out color]
   (let [[r g b] (mapv #(int (* 255 %)) color)]
     (.write out (str r " " g " " b "\n"))))
+
+(defn color [{::ray/keys [direction] :as ray} {::body/keys [hit-fn]}]
+  (if-let [hit-record (hit-fn ray 0 10)]
+    (let [t          (::body/t hit-record)
+          [nx ny nz] (vec3/unit (vec3/subtract (ray/at ray t) [0 0 -1]))]
+      (vec3/multiply [(inc nx) (inc ny) (inc nz)] 0.5))
+    (let [[_x y _z] (vec3/unit direction)
+          a         (* 0.5 (+ y 1.0))]
+      (vec3/add (vec3/multiply [1.0 1.0 1.0] (- 1.0 a))
+                (vec3/multiply [0.5 0.7 1] a)))))
 
 (defn -main []
   (time
@@ -45,7 +56,7 @@
                                   (vec3/add (vec3/multiply pixel-dv j)))
                 ray-direction (vec3/subtract pixel-center camera-center)
                 a-ray         #::ray{:origin camera-center :direction ray-direction}
-                color         (ray/color a-ray (sphere [0 0 -1] 0.5))]
+                color         (color a-ray (sphere [0 0 -1] 0.5))]
             (write-color! out color)))))
      :done)))
 
