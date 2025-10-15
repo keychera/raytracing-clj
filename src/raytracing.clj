@@ -14,8 +14,24 @@
   (let [[r g b] (mapv #(int (* 255 %)) color)]
     (.write out (str r " " g " " b "\n"))))
 
-(defn color [{::ray/keys [direction] :as ray} {::body/keys [hit-fn]}]
-  (if-let [hit-record (hit-fn ray 0 10)]
+(def hittables
+  [(sphere [0 0 -1] 0.5)
+   (sphere [1 0.2 -0.9] 0.5)])
+
+(defn hit-anything [ray bodies t-min t-max]
+  (loop [[body & remaining] bodies
+         closest-so-far     t-max
+         hit-record         nil]
+    (if (some? body)
+      (let [hit-fn  (::body/hit-fn body)
+            got-hit (hit-fn ray t-min closest-so-far)]
+        (if (some? got-hit)
+          (recur remaining (::body/t got-hit) got-hit)
+          (recur remaining closest-so-far     hit-record)))
+      hit-record)))
+
+(defn color [{::ray/keys [direction] :as ray} bodies]
+  (if-let [hit-record (hit-anything ray bodies 0 10)]
     (let [t          (::body/t hit-record)
           [nx ny nz] (vec3/unit (vec3/subtract (ray/at ray t) [0 0 -1]))]
       (vec3/multiply [(inc nx) (inc ny) (inc nz)] 0.5))
@@ -56,7 +72,6 @@
                                   (vec3/add (vec3/multiply pixel-dv j)))
                 ray-direction (vec3/subtract pixel-center camera-center)
                 a-ray         #::ray{:origin camera-center :direction ray-direction}
-                color         (color a-ray (sphere [0 0 -1] 0.5))]
+                color         (color a-ray hittables)]
             (write-color! out color)))))
      :done)))
-
