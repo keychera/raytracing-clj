@@ -10,7 +10,7 @@
      (let [oc (vec3/subtract center origin)
            a  (vec3/length-squared direction)
            h  (vec3/dot direction oc)
-           c  (- (vec3/length-squared direction) (* radius radius))
+           c  (- (vec3/length-squared oc) (* radius radius))
            discriminant (- (* h h) (* a c))]
        (if (< discriminant 0)
          nil
