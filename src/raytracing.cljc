@@ -1,14 +1,16 @@
 (ns raytracing
   (:require
+   #?@(:bb  [[clojure.java.io :as io]]
+       :clj [[clojure.java.io :as io]
+             [ppm2png :refer [ppm->png]]])
    [body :as body]
-   [clojure.java.io :as io]
    [models :refer [sphere]]
    [ray :as ray] ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
    [vec3]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
-(set! *warn-on-reflection* true)
+#?(:clj (set! *warn-on-reflection* true))
 
 (defn clamp [x min-v max-v] (min max-v (max x min-v)))
 
@@ -76,8 +78,10 @@
                                 (repeatedly samples-per-px)
                                 (reduce vec3/add)
                                 ((fn [color] (vec3/divide color samples-per-px)))))]
-     (with-open [out (io/writer "scene.ppm")]
-       (.write out (str "P3\n" image-width " " image-height "\n255\n"))
-       (doseq [color colors]
-         (write-color! out color)))
-     :done)))
+     #?(:clj
+        (with-open [out (io/writer "scene.ppm")]
+          (.write out (str "P3\n" image-width " " image-height "\n255\n"))
+          (doseq [color colors]
+            (write-color! out color))))
+     #?(:bb  :noop
+        :clj (ppm->png "scene.ppm" "scene.png")))))
