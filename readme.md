@@ -8,14 +8,15 @@ https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
 ## run
 
-either use [babashka](https://book.babashka.org/#getting_started)
-
-```
-bb -m raytracing
-```
-
-or clojure
+use clojure
 
 ```
 clojure -M:main
+```
+
+using [babashka](https://book.babashka.org/#getting_started) is possible but significantly slower 
+(need to lower sample-per-px and hit depth for faster calculation)
+
+```
+bb -m raytracing
 ```

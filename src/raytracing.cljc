@@ -19,8 +19,8 @@
     (.write out (str r " " g " " b "\n"))))
 
 (def hittables
-  [(sphere (vec3a/make 0 0 -1) 0.5)
-   (sphere (vec3a/make 0 -100.5 -1) 100)])
+  [(sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
+   (sphere (vec3a/make 0.0 -100.5 -1.0) 100)])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
@@ -36,7 +36,7 @@
 
 (defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
   (if (<= depth 0)
-    (vec3a/make 0 0 0)
+    (vec3a/make)
     (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
       (let [normal    (::body/normal hit-record)
             point     (::body/point hit-record)
@@ -45,7 +45,7 @@
       (let [y (vec3a/y (vec3a/unit direction))
             a (* 0.5 (+ y 1.0))]
         (vec3a/add (vec3a/multiply (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
-                   (vec3a/multiply (vec3a/make 0.5 0.7 1) a))))))
+                   (vec3a/multiply (vec3a/make 0.5 0.7 1.0) a))))))
 
 (defn -main []
   (time
@@ -60,12 +60,12 @@
          ;; not using aspect-ratio is deliberate here
          viewport-width  (* viewport-height (/ image-width image-height))
          camera-center   (vec3a/make)
-         viewport-u      (vec3a/make viewport-width 0 0)
-         viewport-v      (vec3a/make 0 (- viewport-height) 0) ;; negative because we want upper-left to be zero and increases at we scan down
+         viewport-u      (vec3a/make viewport-width 0.0 0.0)
+         viewport-v      (vec3a/make 0.0 (- viewport-height) 0.0) ;; negative because we want upper-left to be zero and increases at we scan down
          pixel-du        (vec3a/divide viewport-u image-width)
          pixel-dv        (vec3a/divide viewport-v image-height)
          upper-left      (-> camera-center
-                             (vec3a/subtract (vec3a/make 0 0 focal-length))
+                             (vec3a/subtract (vec3a/make 0.0 0.0 focal-length))
                              (vec3a/subtract (vec3a/divide viewport-u 2))
                              (vec3a/subtract (vec3a/divide viewport-v 2)))
          pixel-00-loc    (vec3a/add upper-left (vec3a/multiply (vec3a/add pixel-du pixel-dv) 0.5)) 
