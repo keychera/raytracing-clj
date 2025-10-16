@@ -34,14 +34,18 @@
           (recur remaining closest-so-far     hit-record)))
       hit-record)))
 
-(defn color [{::ray/keys [direction] :as ray} bodies]
-  (if-let [hit-record (hit-anything ray bodies 0 10)]
-    (let [normal (::body/normal hit-record)]
-      (vec3/multiply (vec3/add normal [1 1 1]) 0.5))
-    (let [[_x y _z] (vec3/unit direction)
-          a         (* 0.5 (+ y 1.0))]
-      (vec3/add (vec3/multiply [1.0 1.0 1.0] (- 1.0 a))
-                (vec3/multiply [0.5 0.7 1] a)))))
+(defn ray-color [{::ray/keys [direction] :as ray} depth world]
+  (if (<= depth 0)
+    [0 0 0]
+    (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
+      (let [normal    (::body/normal hit-record)
+            point     (::body/point hit-record)
+            direction (vec3/random-on-hemisphere normal)]
+        (vec3/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
+      (let [[_x y _z] (vec3/unit direction)
+            a         (* 0.5 (+ y 1.0))]
+        (vec3/add (vec3/multiply [1.0 1.0 1.0] (- 1.0 a))
+                  (vec3/multiply [0.5 0.7 1] a))))))
 
 (defn -main []
   (time
@@ -66,7 +70,7 @@
                              (vec3/subtract (vec3/divide viewport-v 2)))
          pixel-00-loc    (vec3/add upper-left (vec3/multiply (vec3/add pixel-du pixel-dv) 0.5))
 
-         samples-per-px  10
+         samples-per-px  100
          colors          (for [j (range image-height)
                                i (range image-width)]
                            (->> #(let [pixel-sample  (-> pixel-00-loc
@@ -74,7 +78,7 @@
                                                          (vec3/add (vec3/multiply pixel-dv (+ j (- (rand) 0.5)))))
                                        ray-direction (vec3/subtract pixel-sample camera-center)
                                        a-ray         #::ray{:origin camera-center :direction ray-direction}]
-                                   (color a-ray hittables))
+                                   (ray-color a-ray 10 hittables))
                                 (repeatedly samples-per-px)
                                 (reduce vec3/add)
                                 ((fn [color] (vec3/divide color samples-per-px)))))]
