@@ -40,7 +40,7 @@
     (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
       (let [normal    (::body/normal hit-record)
             point     (::body/point hit-record)
-            direction (vec3a/random-on-hemisphere normal)]
+            direction (vec3a/add normal (vec3a/random-unit-vec3))]
         (vec3a/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
       (let [y (vec3a/y (vec3a/unit direction))
             a (* 0.5 (+ y 1.0))]
