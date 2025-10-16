@@ -6,7 +6,7 @@
    [body :as body]
    [models :refer [sphere]]
    [ray :as ray] ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
-   [vec3]))
+   [vec3a :as vec3a]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
@@ -19,8 +19,8 @@
     (.write out (str r " " g " " b "\n"))))
 
 (def hittables
-  [(sphere [0 0 -1] 0.5)
-   (sphere [0 -100.5 -1] 100)])
+  [(sphere (vec3a/make 0 0 -1) 0.5)
+   (sphere (vec3a/make 0 -100.5 -1) 100)])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
@@ -34,18 +34,18 @@
           (recur remaining closest-so-far     hit-record)))
       hit-record)))
 
-(defn ray-color [{::ray/keys [direction] :as ray} depth world]
+(defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
   (if (<= depth 0)
-    [0 0 0]
+    (vec3a/make 0 0 0)
     (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
       (let [normal    (::body/normal hit-record)
             point     (::body/point hit-record)
-            direction (vec3/random-on-hemisphere normal)]
-        (vec3/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
-      (let [[_x y _z] (vec3/unit direction)
-            a         (* 0.5 (+ y 1.0))]
-        (vec3/add (vec3/multiply [1.0 1.0 1.0] (- 1.0 a))
-                  (vec3/multiply [0.5 0.7 1] a))))))
+            direction (vec3a/random-on-hemisphere normal)]
+        (vec3a/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
+      (let [y (vec3a/y (vec3a/unit direction))
+            a (* 0.5 (+ y 1.0))]
+        (vec3a/add (vec3a/multiply (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
+                   (vec3a/multiply (vec3a/make 0.5 0.7 1) a))))))
 
 (defn -main []
   (time
@@ -59,29 +59,28 @@
          viewport-height 2.0
          ;; not using aspect-ratio is deliberate here
          viewport-width  (* viewport-height (/ image-width image-height))
-         camera-center   [0 0 0]
-         viewport-u      [viewport-width 0 0]
-         viewport-v      [0 (- viewport-height) 0] ;; negative because we want upper-left to be zero and increases at we scan down
-         pixel-du        (vec3/divide viewport-u image-width)
-         pixel-dv        (vec3/divide viewport-v image-height)
+         camera-center   (vec3a/make)
+         viewport-u      (vec3a/make viewport-width 0 0)
+         viewport-v      (vec3a/make 0 (- viewport-height) 0) ;; negative because we want upper-left to be zero and increases at we scan down
+         pixel-du        (vec3a/divide viewport-u image-width)
+         pixel-dv        (vec3a/divide viewport-v image-height)
          upper-left      (-> camera-center
-                             (vec3/subtract [0 0 focal-length])
-                             (vec3/subtract (vec3/divide viewport-u 2))
-                             (vec3/subtract (vec3/divide viewport-v 2)))
-         pixel-00-loc    (vec3/add upper-left (vec3/multiply (vec3/add pixel-du pixel-dv) 0.5))
-
+                             (vec3a/subtract (vec3a/make 0 0 focal-length))
+                             (vec3a/subtract (vec3a/divide viewport-u 2))
+                             (vec3a/subtract (vec3a/divide viewport-v 2)))
+         pixel-00-loc    (vec3a/add upper-left (vec3a/multiply (vec3a/add pixel-du pixel-dv) 0.5)) 
          samples-per-px  100
          colors          (for [j (range image-height)
                                i (range image-width)]
                            (->> #(let [pixel-sample  (-> pixel-00-loc
-                                                         (vec3/add (vec3/multiply pixel-du (+ i (- (rand) 0.5))))
-                                                         (vec3/add (vec3/multiply pixel-dv (+ j (- (rand) 0.5)))))
-                                       ray-direction (vec3/subtract pixel-sample camera-center)
+                                                         (vec3a/add (vec3a/multiply pixel-du (+ i (- (rand) 0.5))))
+                                                         (vec3a/add (vec3a/multiply pixel-dv (+ j (- (rand) 0.5)))))
+                                       ray-direction (vec3a/subtract pixel-sample camera-center)
                                        a-ray         #::ray{:origin camera-center :direction ray-direction}]
                                    (ray-color a-ray 10 hittables))
                                 (repeatedly samples-per-px)
-                                (reduce vec3/add)
-                                ((fn [color] (vec3/divide color samples-per-px)))))]
+                                (reduce vec3a/add)
+                                ((fn [color] (vec3a/divide color samples-per-px)))))]
      #?(:clj
         (with-open [out (io/writer "scene.ppm")]
           (.write out (str "P3\n" image-width " " image-height "\n255\n"))

@@ -1,0 +1,109 @@
+(ns vec3a)
+
+;; vec3a is ^doubles [x y z]
+;; we wanted float but functions type hints are only limited to long and double
+
+(set! *warn-on-reflection* true)
+
+(defn x ^double [^doubles v] (aget v 0))
+(defn set-x! [^doubles v ^double n] (aset v 0 n))
+
+(defn y ^double [^doubles v] (aget v 1))
+(defn set-y! [^doubles v ^double n] (aset v 1 n))
+
+(defn z ^double [^doubles v] (aget v 2))
+(defn set-z! [^doubles v ^double n] (aset v 2 n))
+
+(defn make
+  (^doubles [] (make-array Double/TYPE 3))
+  (^doubles [^double x ^double y ^double z]
+   (doto (make) (aset 0 x) (aset 1 y) (aset 2 z))))
+
+(defn add ^doubles [^doubles v1 ^doubles v2]
+  (doto (make)
+    (set-x! (+ (x v1) (x v2)))
+    (set-y! (+ (y v1) (y v2)))
+    (set-z! (+ (z v1) (z v2)))))
+
+(defn subtract ^doubles [^doubles v1 ^doubles v2]
+  (doto (make)
+    (set-x! (- (x v1) (x v2)))
+    (set-y! (- (y v1) (y v2)))
+    (set-z! (- (z v1) (z v2)))))
+
+(defn negative ^doubles [^doubles v]
+  (doto (make)
+    (set-x! (- (x v)))
+    (set-y! (- (y v)))
+    (set-z! (- (z v)))))
+
+(defn multiply ^doubles [^doubles v ^double s]
+  (doto (make)
+    (set-x! (* (x v) s))
+    (set-y! (* (y v) s))
+    (set-z! (* (z v) s))))
+
+(defn divide ^doubles [^doubles v ^double s]
+  (doto (make)
+    (set-x! (/ (x v) s))
+    (set-y! (/ (y v) s))
+    (set-z! (/ (z v) s))))
+
+(defn length-squared ^double [^doubles v]
+  (+ (* (x v) (x v)) (* (y v) (y v)) (* (z v) (z v))))
+
+(defn length ^double [v] (Math/sqrt (length-squared v)))
+
+(defn dot ^double [^doubles v1 ^doubles v2]
+  (+ (* (x v1) (x v2))
+     (* (y v1) (y v2))
+     (* (z v1) (z v2))))
+
+(defn cross ^doubles [^doubles u ^doubles v]
+  (let [u0 (x u) u1 (y u) u2 (z u)
+        v0 (x v) v1 (y v) v2 (z v)]
+    (doto (make)
+      (set-x! (- (* u1 v2) (* u2 v1)))
+      (set-y! (- (* u2 v0) (* u0 v2)))
+      (set-z! (- (* u0 v1) (* u1 v0))))))
+
+(defn unit ^doubles [^doubles v] (divide v (length v)))
+
+(defn random-vec3
+  (^doubles []
+   (doto (make)
+     (set-x! (rand))
+     (set-y! (rand))
+     (set-z! (rand))))
+  (^doubles [^double vmin ^double vmax]
+   (let [rand-range-fn (fn [] (+ vmin (rand (- vmax vmin))))]
+     (doto (make)
+       (set-x! (rand-range-fn))
+       (set-y! (rand-range-fn))
+       (set-z! (rand-range-fn))))))
+
+(defn random-unit-vec3 ^doubles []
+  (->> (repeatedly #(random-vec3 -1.0 1.0))
+       (map (fn [p]
+              (let [lensq (length-squared p)]
+                (when (and (> lensq 1e-160) (<= lensq 1.0))
+                  (divide p (Math/sqrt lensq))))))
+       (remove nil?)
+       (first)))
+
+(defn random-on-hemisphere ^doubles [^doubles normal]
+  (let [on-unit-sphere (random-unit-vec3)]
+    (if (> (dot on-unit-sphere normal) 0.0)
+      on-unit-sphere
+      (negative on-unit-sphere))))
+
+(comment
+  (require '[clojure.pprint :refer [pprint]])
+
+  (let [op1 (random-unit-vec3)
+        op2 (random-on-hemisphere (random-unit-vec3))
+        res (dot op1 op2)]
+    (pprint res)
+    res))
+
+

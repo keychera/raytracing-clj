@@ -2,15 +2,15 @@
   (:require
    [body :as body]
    [ray :as ray]
-   [vec3 :as vec3]))
+   [vec3a :as vec3a]))
 
-(defn sphere [center radius]
+(defn sphere [^doubles center ^double radius]
   {::body/hit-fn
    (fn [{::ray/keys [origin direction] :as the-ray} t-min t-max]
-     (let [oc (vec3/subtract center origin)
-           a  (vec3/length-squared direction)
-           h  (vec3/dot direction oc)
-           c  (- (vec3/length-squared oc) (* radius radius))
+     (let [oc (vec3a/subtract center origin)
+           a  (vec3a/length-squared direction)
+           h  (vec3a/dot direction oc)
+           c  (- (vec3a/length-squared oc) (* radius radius))
            discriminant (- (* h h) (* a c))]
        (if (< discriminant 0)
          nil
@@ -22,5 +22,5 @@
            (if (or (<= root t-min) (<= t-max root))
              nil
              (let [point          (ray/at the-ray root)
-                   outward-normal (vec3/divide (vec3/subtract point center) radius)]
+                   outward-normal (vec3a/divide (vec3a/subtract point center) radius)]
                (body/hit-record the-ray point outward-normal root)))))))})

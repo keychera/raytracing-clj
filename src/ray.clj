@@ -1,8 +1,8 @@
 (ns ray
   (:require
-   [vec3]))
+   [vec3a]))
 
-;; ray is {::origin vec3 ::direction vec3}
+;; ray is {::origin vec3a ::direction vec3a}
 
-(defn at [{::keys [origin direction]} t]
-  (vec3/add origin (vec3/multiply direction t)))
+(defn at [{::keys [^doubles origin ^doubles direction]} t]
+  (vec3a/add origin (vec3a/multiply direction t)))
