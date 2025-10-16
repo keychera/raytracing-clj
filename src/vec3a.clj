@@ -1,18 +1,13 @@
 (ns vec3a)
 
-;; vec3a is ^doubles [x y z]
+;; vec3a is ^doubles [x y z], initially there is a class named vec3 using clojure vec but it is slow
 ;; we wanted float but functions type hints are only limited to long and double
 
 (set! *warn-on-reflection* true)
 
 (defn x ^double [^doubles v] (aget v 0))
-(defn set-x! [^doubles v ^double n] (aset v 0 n))
-
 (defn y ^double [^doubles v] (aget v 1))
-(defn set-y! [^doubles v ^double n] (aset v 1 n))
-
 (defn z ^double [^doubles v] (aget v 2))
-(defn set-z! [^doubles v ^double n] (aset v 2 n))
 
 (defn make
   (^doubles [] (make-array Double/TYPE 3))
@@ -20,34 +15,23 @@
    (doto (make) (aset 0 x) (aset 1 y) (aset 2 z))))
 
 (defn add ^doubles [^doubles v1 ^doubles v2]
-  (doto (make)
-    (set-x! (+ (x v1) (x v2)))
-    (set-y! (+ (y v1) (y v2)))
-    (set-z! (+ (z v1) (z v2)))))
+  (make (+ (x v1) (x v2))
+        (+ (y v1) (y v2))
+        (+ (z v1) (z v2))))
 
 (defn subtract ^doubles [^doubles v1 ^doubles v2]
-  (doto (make)
-    (set-x! (- (x v1) (x v2)))
-    (set-y! (- (y v1) (y v2)))
-    (set-z! (- (z v1) (z v2)))))
+  (make (- (x v1) (x v2))
+        (- (y v1) (y v2))
+        (- (z v1) (z v2))))
 
 (defn negative ^doubles [^doubles v]
-  (doto (make)
-    (set-x! (- (x v)))
-    (set-y! (- (y v)))
-    (set-z! (- (z v)))))
+  (make (- (x v)) (- (y v)) (- (z v))))
 
 (defn multiply ^doubles [^doubles v ^double s]
-  (doto (make)
-    (set-x! (* (x v) s))
-    (set-y! (* (y v) s))
-    (set-z! (* (z v) s))))
+  (make (* (x v) s) (* (y v) s) (* (z v) s)))
 
 (defn divide ^doubles [^doubles v ^double s]
-  (doto (make)
-    (set-x! (/ (x v) s))
-    (set-y! (/ (y v) s))
-    (set-z! (/ (z v) s))))
+  (make (/ (x v) s) (/ (y v) s) (/ (z v) s)))
 
 (defn length-squared ^double [^doubles v]
   (+ (* (x v) (x v)) (* (y v) (y v)) (* (z v) (z v))))
@@ -62,25 +46,18 @@
 (defn cross ^doubles [^doubles u ^doubles v]
   (let [u0 (x u) u1 (y u) u2 (z u)
         v0 (x v) v1 (y v) v2 (z v)]
-    (doto (make)
-      (set-x! (- (* u1 v2) (* u2 v1)))
-      (set-y! (- (* u2 v0) (* u0 v2)))
-      (set-z! (- (* u0 v1) (* u1 v0))))))
+    (make (- (* u1 v2) (* u2 v1))
+          (- (* u2 v0) (* u0 v2))
+          (- (* u0 v1) (* u1 v0)))))
 
 (defn unit ^doubles [^doubles v] (divide v (length v)))
 
 (defn random-vec3
   (^doubles []
-   (doto (make)
-     (set-x! (rand))
-     (set-y! (rand))
-     (set-z! (rand))))
+   (make (rand) (rand) (rand)))
   (^doubles [^double vmin ^double vmax]
    (let [rand-range-fn (fn [] (+ vmin (rand (- vmax vmin))))]
-     (doto (make)
-       (set-x! (rand-range-fn))
-       (set-y! (rand-range-fn))
-       (set-z! (rand-range-fn))))))
+     (make (rand-range-fn) (rand-range-fn) (rand-range-fn)))))
 
 (defn random-unit-vec3 ^doubles []
   (->> (repeatedly #(random-vec3 -1.0 1.0))
