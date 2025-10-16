@@ -14,8 +14,11 @@
 
 (defn clamp [x min-v max-v] (min max-v (max x min-v)))
 
+(defn linear->gamma [^double component]
+  (if (> component 0) (Math/sqrt component) 0))
+
 (defn write-color! [^java.io.BufferedWriter out color]
-  (let [[r g b] (mapv #(int (* 256 (clamp % 0.0 0.999))) color)]
+  (let [[r g b] (mapv #(int (* 256 (clamp (linear->gamma %) 0.0 0.999))) color)]
     (.write out (str r " " g " " b "\n"))))
 
 (def hittables
