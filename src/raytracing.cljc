@@ -5,6 +5,7 @@
              [ppm2png :refer [ppm->png]]])
    [body :as body]
    [hit :as hit]
+   [material :as material]
    [models :refer [sphere]]
    [ray :as ray]
    [vec3a :as vec3a]))
@@ -24,7 +25,8 @@
 
 (def hittables
   [(sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
-   (sphere (vec3a/make 0.0 -100.5 -1.0) 100)])
+   (merge (sphere (vec3a/make 0.0 -100.5 -1.0) 100)
+          (material/lambertian 0.5))])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
@@ -38,14 +40,18 @@
           (recur remaining closest-so-far     hit-record)))
       hit-record)))
 
+(defmacro color-black [] `(vec3a/make))
+
 (defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
   (if (<= depth 0)
-    (vec3a/make)
+    (color-black)
     (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
-      (let [normal    (::hit/normal hit-record)
-            point     (::hit/point hit-record)
-            direction (vec3a/add normal (vec3a/random-unit-vec3))]
-        (vec3a/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
+      (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
+            scattered  (when scatter-fn (scatter-fn ray hit-record))]
+        (if scattered
+          (vec3a/multiply (ray-color (::material/scattered-ray scattered) (dec depth) world)
+                          (::material/attenuation scattered))
+          (color-black)))
       (let [y (vec3a/y (vec3a/unit direction))
             a (* 0.5 (+ y 1.0))]
         (vec3a/add (vec3a/multiply (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
@@ -72,7 +78,7 @@
                              (vec3a/subtract (vec3a/make 0.0 0.0 focal-length))
                              (vec3a/subtract (vec3a/divide viewport-u 2))
                              (vec3a/subtract (vec3a/divide viewport-v 2)))
-         pixel-00-loc    (vec3a/add upper-left (vec3a/multiply (vec3a/add pixel-du pixel-dv) 0.5)) 
+         pixel-00-loc    (vec3a/add upper-left (vec3a/multiply (vec3a/add pixel-du pixel-dv) 0.5))
          samples-per-px  100
          colors          (for [j (range image-height)
                                i (range image-width)]

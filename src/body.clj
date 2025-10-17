@@ -6,4 +6,3 @@
 
 ;; hit-fn is (fn [ray t-min t-max] hit-record)
 (s/def ::hit-fn fn?)
-(s/def ::mat any?)

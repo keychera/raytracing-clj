@@ -7,9 +7,7 @@
 
 (defn sphere [^doubles center ^double radius]
   {::body/hit-fn
-   (fn [{::body/keys [mat]}
-        {::ray/keys [origin direction] :as the-ray}
-        t-min t-max]
+   (fn [self {::ray/keys [origin direction] :as the-ray} t-min t-max]
      (let [oc (vec3a/subtract center origin)
            a  (vec3a/length-squared direction)
            h  (vec3a/dot direction oc)
@@ -26,7 +24,7 @@
              nil
              (let [point          (ray/at the-ray root)
                    outward-normal (vec3a/divide (vec3a/subtract point center) radius)]
-               {::hit/point  point
+               {::hit/what   self
+                ::hit/point  point
                 ::hit/normal (hit/calc-normal the-ray outward-normal)
-                ::hit/t      root
-                ::hit/mat    mat}))))))})
+                ::hit/t      root}))))))})
