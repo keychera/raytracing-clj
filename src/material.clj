@@ -7,8 +7,8 @@
 
 ;; scatter-fn is (fn ^{:scattered ^ray :attenuation ^doubles} [ray hit])
 ;; these comment type notation is still flux
-(s/def scatter-fn fn?)
-(s/def attenuation any?)
+(s/def ::scatter-fn fn?)
+(s/def ::attenuation any?)
 
 (defn lambertian [albedo-vec3]
   {::scatter-fn

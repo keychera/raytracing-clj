@@ -1,8 +1,8 @@
 (ns hit 
   (:require
+   [clojure.spec.alpha :as s]
    [ray :as ray]
-   [vec3a :as vec3a]
-   [clojure.spec.alpha :as s]))
+   [vec3a :as vec3a]))
 
 ;; hit-record
 (s/def ::what any?)

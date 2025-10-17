@@ -1,12 +1,11 @@
-(ns models
+(ns hittable
   (:require
-   [body :as body]
    [hit :as hit]
    [ray :as ray]
    [vec3a :as vec3a]))
 
 (defn sphere [^doubles center ^double radius]
-  {::body/hit-fn
+  {::hit-fn
    (fn [self {::ray/keys [origin direction] :as the-ray} t-min t-max]
      (let [oc (vec3a/subtract center origin)
            a  (vec3a/length-squared direction)

@@ -2,11 +2,10 @@
   (:require
    #?@(:bb  [[clojure.java.io :as io]]
        :clj [[clojure.java.io :as io]
-             [ppm2png :refer [ppm->png]]])
-   [body :as body]
+             [ppm2png :refer [ppm->png]]]) 
    [hit :as hit]
    [material :as material]
-   [models :as models]
+   [hittable :as hittable]
    [ray :as ray]
    [vec3a :as vec3a]))
 
@@ -24,9 +23,9 @@
     (.write out (str r " " g " " b "\n"))))
 
 (def hittables
-  [(merge (models/sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
+  [(merge (hittable/sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
           (material/lambertian (vec3a/make 0.1 0.2 0.5)))
-   (merge (models/sphere (vec3a/make 0.0 -100.5 -1.0) 100)
+   (merge (hittable/sphere (vec3a/make 0.0 -100.5 -1.0) 100)
           (material/lambertian (vec3a/make 0.5 0.5 0.5)))])
 
 (defn hit-anything [ray bodies t-min t-max]
@@ -34,7 +33,7 @@
          closest-so-far     t-max
          hit-record         nil]
     (if (some? body)
-      (let [hit-fn  (::body/hit-fn body)
+      (let [hit-fn  (::hittable/hit-fn body)
             got-hit (hit-fn body ray t-min closest-so-far)]
         (if (some? got-hit)
           (recur remaining (::hit/t got-hit) got-hit)
