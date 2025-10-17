@@ -10,10 +10,10 @@
 (s/def scatter-fn fn?)
 (s/def attenuation any?)
 
-(defn lambertian [albedo-scalar]
+(defn lambertian [albedo-vec3]
   {::scatter-fn
-   (fn metal-scatter [{::ray/keys []} {::hit/keys [point normal]}]
+   (fn lambertian-scatter [{::ray/keys []} {::hit/keys [point normal]}]
      (let [scatter-direction (vec3a/add normal (vec3a/random-unit-vec3))]
        {::scattered-ray #::ray{:origin point :direction scatter-direction}
-        ::attenuation   albedo-scalar}))})
+        ::attenuation   albedo-vec3}))})
 

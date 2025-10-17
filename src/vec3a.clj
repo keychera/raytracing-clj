@@ -27,7 +27,10 @@
 (defn negative ^doubles [^doubles v]
   (make (- (x v)) (- (y v)) (- (z v))))
 
-(defn multiply ^doubles [^doubles v ^double s]
+(defn mult-vec3 ^doubles [^doubles v1 ^doubles v2]
+  (make (* (x v1) (x v2)) (* (y v1) (y v2)) (* (z v1) (z v2))))
+
+(defn mult-scalar ^doubles [^doubles v ^double s]
   (make (* (x v) s) (* (y v) s) (* (z v) s)))
 
 (defn divide ^doubles [^doubles v ^double s]

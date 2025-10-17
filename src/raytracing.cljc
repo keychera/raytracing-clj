@@ -6,7 +6,7 @@
    [body :as body]
    [hit :as hit]
    [material :as material]
-   [models :refer [sphere]]
+   [models :as models]
    [ray :as ray]
    [vec3a :as vec3a]))
 
@@ -24,9 +24,10 @@
     (.write out (str r " " g " " b "\n"))))
 
 (def hittables
-  [(sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
-   (merge (sphere (vec3a/make 0.0 -100.5 -1.0) 100)
-          (material/lambertian 0.5))])
+  [(merge (models/sphere (vec3a/make 0.0 0.0 -1.0) 0.5)
+          (material/lambertian (vec3a/make 0.1 0.2 0.5)))
+   (merge (models/sphere (vec3a/make 0.0 -100.5 -1.0) 100)
+          (material/lambertian (vec3a/make 0.5 0.5 0.5)))])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
@@ -49,13 +50,13 @@
       (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
             scattered  (when scatter-fn (scatter-fn ray hit-record))]
         (if scattered
-          (vec3a/multiply (ray-color (::material/scattered-ray scattered) (dec depth) world)
-                          (::material/attenuation scattered))
+          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world)
+                           (::material/attenuation scattered))
           (color-black)))
       (let [y (vec3a/y (vec3a/unit direction))
             a (* 0.5 (+ y 1.0))]
-        (vec3a/add (vec3a/multiply (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
-                   (vec3a/multiply (vec3a/make 0.5 0.7 1.0) a))))))
+        (vec3a/add (vec3a/mult-scalar (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
+                   (vec3a/mult-scalar (vec3a/make 0.5 0.7 1.0) a))))))
 
 (defn -main []
   (time
@@ -78,13 +79,13 @@
                              (vec3a/subtract (vec3a/make 0.0 0.0 focal-length))
                              (vec3a/subtract (vec3a/divide viewport-u 2))
                              (vec3a/subtract (vec3a/divide viewport-v 2)))
-         pixel-00-loc    (vec3a/add upper-left (vec3a/multiply (vec3a/add pixel-du pixel-dv) 0.5))
+         pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
          samples-per-px  100
          colors          (for [j (range image-height)
                                i (range image-width)]
                            (->> #(let [pixel-sample  (-> pixel-00-loc
-                                                         (vec3a/add (vec3a/multiply pixel-du (+ i (- (rand) 0.5))))
-                                                         (vec3a/add (vec3a/multiply pixel-dv (+ j (- (rand) 0.5)))))
+                                                         (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
+                                                         (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
                                        ray-direction (vec3a/subtract pixel-sample camera-center)
                                        a-ray         #::ray{:origin camera-center :direction ray-direction}]
                                    (ray-color a-ray 10 hittables))
