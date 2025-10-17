@@ -33,9 +33,9 @@
    (merge (hittable/sphere (vec3a/make  0.0  0.0 -1.0) 0.5)
           (material/lambertian (RGB 0.1 0.2 0.5)))
    (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.5)
-          (material/metal (RGB 0.8 0.8 0.8)))
+          (material/metal (RGB 0.8 0.8 0.8) 0.3))
    (merge (hittable/sphere (vec3a/make  1.0  0.0 -1.0) 0.5)
-          (material/metal (RGB 0.8 0.6 0.2)))])
+          (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies

@@ -10,16 +10,18 @@
 (s/def ::scatter-fn fn?)
 (s/def ::attenuation any?)
 
-(defn lambertian [albedo-vec3]
+(defn lambertian [^doubles albedo]
   {::scatter-fn
    (fn lambertian-scatter [_ray {::hit/keys [point normal]}]
      (let [scatter-direction (vec3a/add normal (vec3a/random-unit-vec3))]
        {::scattered-ray #::ray{:origin point :direction scatter-direction}
-        ::attenuation   albedo-vec3}))})
+        ::attenuation   albedo}))})
 
-(defn metal [albedo-vec3]
+(defn metal [^doubles albedo ^double fuzz]
   {::scatter-fn
    (fn metal-scatter [{::ray/keys [direction]} {::hit/keys [point normal]}]
-     (let [reflected (vec3a/reflect direction normal)]
-       {::scattered-ray #::ray{:origin point :direction reflected}
-        ::attenuation   albedo-vec3}))})
+     (let [reflected (-> (vec3a/reflect direction normal)
+                         (vec3a/add (vec3a/mult-scalar (vec3a/random-unit-vec3) fuzz)))]
+       (when (> (vec3a/dot reflected normal) 0)
+         {::scattered-ray #::ray{:origin point :direction reflected}
+          ::attenuation   albedo})))})
