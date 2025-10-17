@@ -28,12 +28,19 @@
 (defmacro RGB [r g b] `(vec3a/make ~r ~g ~b))
 
 (def hittables
-  [(merge (hittable/sphere (vec3a/make  0.0 -100.5 -1.0) 100.0)
+  [;; ground
+   (merge (hittable/sphere (vec3a/make  0.0 -100.5 -1.0) 100.0)
           (material/lambertian (RGB 0.8 0.8 0.0)))
+   ;; center
    (merge (hittable/sphere (vec3a/make  0.0  0.0 -1.2) 0.5)
           (material/lambertian (RGB 0.1 0.2 0.5)))
+   ;; left
    (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.5)
-          (material/dielectric (/ 1.00 1.33)))
+          (material/dielectric 1.5))
+   ;; bubble
+   (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.4)
+          (material/dielectric (/ 1.00 1.5)))
+   ;; right
    (merge (hittable/sphere (vec3a/make  1.0  0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
