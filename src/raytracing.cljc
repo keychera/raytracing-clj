@@ -30,10 +30,10 @@
 (def hittables
   [(merge (hittable/sphere (vec3a/make  0.0 -100.5 -1.0) 100.0)
           (material/lambertian (RGB 0.8 0.8 0.0)))
-   (merge (hittable/sphere (vec3a/make  0.0  0.0 -1.0) 0.5)
+   (merge (hittable/sphere (vec3a/make  0.0  0.0 -1.2) 0.5)
           (material/lambertian (RGB 0.1 0.2 0.5)))
    (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.5)
-          (material/dielectric 1.5))
+          (material/dielectric (/ 1.00 1.33)))
    (merge (hittable/sphere (vec3a/make  1.0  0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 

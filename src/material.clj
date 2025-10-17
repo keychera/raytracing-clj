@@ -31,6 +31,11 @@
    (fn dielectric-scatter [{::ray/keys [direction]} {::hit/keys [front-face? point normal]}]
      (let [ri        (if front-face? (/ 1.0 refraction-index) refraction-index)
            unit-dir  (vec3a/unit direction)
-           refracted (vec3a/refract unit-dir normal ri)]
-       {::scattered-ray #::ray{:origin point :direction refracted}
+           cos-theta (min (vec3a/dot (vec3a/negative unit-dir) normal) 1.0)
+           sin-theta (Math/sqrt (- 1.0 (* cos-theta cos-theta)))
+           refract?  (<= (* ri sin-theta) 1.0)
+           direction (if refract?
+                       (vec3a/refract unit-dir normal ri)
+                       (vec3a/reflect unit-dir normal))]
+       {::scattered-ray #::ray{:origin point :direction direction}
         ::attenuation (vec3a/make 1.0 1.0 1.0)}))})
