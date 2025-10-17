@@ -4,8 +4,9 @@
        :clj [[clojure.java.io :as io]
              [ppm2png :refer [ppm->png]]])
    [body :as body]
+   [hit :as hit]
    [models :refer [sphere]]
-   [ray :as ray] ;; this is weird, calva repl is fine with just [ray] but `bb -m raytracing` fails and need [ray :as ray]
+   [ray :as ray]
    [vec3a :as vec3a]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
@@ -31,9 +32,9 @@
          hit-record         nil]
     (if (some? body)
       (let [hit-fn  (::body/hit-fn body)
-            got-hit (hit-fn ray t-min closest-so-far)]
+            got-hit (hit-fn body ray t-min closest-so-far)]
         (if (some? got-hit)
-          (recur remaining (::body/t got-hit) got-hit)
+          (recur remaining (::hit/t got-hit) got-hit)
           (recur remaining closest-so-far     hit-record)))
       hit-record)))
 
@@ -41,8 +42,8 @@
   (if (<= depth 0)
     (vec3a/make)
     (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
-      (let [normal    (::body/normal hit-record)
-            point     (::body/point hit-record)
+      (let [normal    (::hit/normal hit-record)
+            point     (::hit/point hit-record)
             direction (vec3a/add normal (vec3a/random-unit-vec3))]
         (vec3a/multiply (ray-color #::ray{:origin point :direction direction} (dec depth) world) 0.5))
       (let [y (vec3a/y (vec3a/unit direction))
