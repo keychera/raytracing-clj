@@ -77,6 +77,9 @@
       on-unit-sphere
       (negative on-unit-sphere))))
 
+(defn reflect [v n]
+  (subtract v (mult-scalar n (* 2 (dot v n)))))
+
 (comment
   (require '[clojure.pprint :refer [pprint]])
 
