@@ -25,3 +25,12 @@
        (when (> (vec3a/dot reflected normal) 0)
          {::scattered-ray #::ray{:origin point :direction reflected}
           ::attenuation   albedo})))})
+
+(defn dielectric [refraction-index]
+  {::scatter-fn
+   (fn dielectric-scatter [{::ray/keys [direction]} {::hit/keys [front-face? point normal]}]
+     (let [ri        (if front-face? (/ 1.0 refraction-index) refraction-index)
+           unit-dir  (vec3a/unit direction)
+           refracted (vec3a/refract unit-dir normal ri)]
+       {::scattered-ray #::ray{:origin point :direction refracted}
+        ::attenuation (vec3a/make 1.0 1.0 1.0)}))})

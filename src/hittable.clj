@@ -22,8 +22,10 @@
            (if (or (<= root t-min) (<= t-max root))
              nil
              (let [point          (ray/at the-ray root)
-                   outward-normal (vec3a/divide (vec3a/subtract point center) radius)]
-               {::hit/what   self
-                ::hit/point  point
-                ::hit/normal (hit/calc-normal the-ray outward-normal)
-                ::hit/t      root}))))))})
+                   outward-normal (vec3a/divide (vec3a/subtract point center) radius)
+                   front-face?    (hit/front-face? the-ray outward-normal)]
+               {::hit/what        self
+                ::hit/point       point
+                ::hit/front-face? front-face?
+                ::hit/normal      (if front-face? outward-normal (vec3a/negative outward-normal))
+                ::hit/t            root}))))))})

@@ -77,8 +77,14 @@
       on-unit-sphere
       (negative on-unit-sphere))))
 
-(defn reflect [v n]
+(defn reflect ^doubles [v n]
   (subtract v (mult-scalar n (* 2 (dot v n)))))
+
+(defn refract ^doubles [^doubles uv ^doubles n ^double eta-per-eta']
+  (let [cos-theta   (min (dot (negative uv) n) 1.0)
+        r'-perpen   (mult-scalar (add uv (mult-scalar n cos-theta)) eta-per-eta')
+        r'-parallel (mult-scalar n (- (Math/sqrt (Math/abs (- 1.0 (length-squared r'-perpen))))))]
+    (add r'-perpen r'-parallel)))
 
 (comment
   (require '[clojure.pprint :refer [pprint]])

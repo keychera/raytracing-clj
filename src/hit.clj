@@ -1,4 +1,4 @@
-(ns hit 
+(ns hit
   (:require
    [clojure.spec.alpha :as s]
    [ray :as ray]
@@ -9,7 +9,7 @@
 (s/def ::point any?)
 (s/def ::normal any?)
 (s/def ::t any?)
+(s/def ::front-face? any?)
 
-(defn calc-normal ^doubles [{::ray/keys [^doubles direction]} ^doubles outward-normal]
-  (let [front-face? (< (vec3a/dot direction outward-normal) 0)]
-    (if front-face? outward-normal (vec3a/negative outward-normal))))
+(defn front-face? [{::ray/keys [^doubles direction]} ^doubles outward-normal]
+  (< (vec3a/dot direction outward-normal) 0))
