@@ -27,6 +27,38 @@
 (defmacro BLACK [] `(vec3a/make))
 (defmacro RGB [r g b] `(vec3a/make ~r ~g ~b))
 
+
+
+(defn hit-anything [ray bodies t-min t-max]
+  (loop [[body & remaining] bodies
+         closest-so-far     t-max
+         hit-record         nil]
+    (if (some? body)
+      (let [hit-fn  (::hittable/hit-fn body)
+            got-hit (hit-fn body ray t-min closest-so-far)]
+        (if (some? got-hit)
+          (recur remaining (::hit/t got-hit) got-hit)
+          (recur remaining closest-so-far     hit-record)))
+      hit-record)))
+
+(defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
+  (if (<= depth 0)
+    (BLACK)
+    (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
+      (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
+            scattered  (when scatter-fn (scatter-fn ray hit-record))]
+        (if scattered
+          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world)
+                           (::material/attenuation scattered))
+          (BLACK)))
+      (let [y (vec3a/y (vec3a/unit direction))
+            a (* 0.5 (+ y 1.0))]
+        (vec3a/add (vec3a/mult-scalar (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
+                   (vec3a/mult-scalar (vec3a/make 0.5 0.7 1.0) a))))))
+
+(defn deg->rad [^double d]
+  (-> d (* Math/PI) (/ 180.0)))
+
 (def hittables
   [;; ground
    (merge (hittable/sphere (vec3a/make  0.0 -100.5 -1.0) 100.0)
@@ -44,48 +76,34 @@
    (merge (hittable/sphere (vec3a/make  1.0  0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
-(defn hit-anything [ray bodies t-min t-max]
-  (loop [[body & remaining] bodies
-         closest-so-far     t-max
-         hit-record         nil]
-    (if (some? body)
-      (let [hit-fn  (::hittable/hit-fn body)
-            got-hit (hit-fn body ray t-min closest-so-far)]
-        (if (some? got-hit)
-          (recur remaining (::hit/t got-hit) got-hit)
-          (recur remaining closest-so-far     hit-record)))
-      hit-record)))
+(def R (Math/cos (/ Math/PI 4)))
 
-
-(defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
-  (if (<= depth 0)
-    (BLACK)
-    (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
-      (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
-            scattered  (when scatter-fn (scatter-fn ray hit-record))]
-        (if scattered
-          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world)
-                           (::material/attenuation scattered))
-          (BLACK)))
-      (let [y (vec3a/y (vec3a/unit direction))
-            a (* 0.5 (+ y 1.0))]
-        (vec3a/add (vec3a/mult-scalar (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
-                   (vec3a/mult-scalar (vec3a/make 0.5 0.7 1.0) a))))))
+(def hittables2
+  [(merge (hittable/sphere (vec3a/make (- R) 0.0 -1.0) R)
+          (material/lambertian (RGB 0 0 1)))
+   ;; right
+   (merge (hittable/sphere (vec3a/make R 0.0 -1.0) R)
+          (material/lambertian (RGB 1 0 0)))])
 
 (defn -main []
   (time
    (let [;; image
+         to-render       hittables2
+         
          aspect-ratio    16/9
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
          samples-per-px  100
          max-depth       50
+         vfov            90.0
+         
 
          ;; camera
          focal-length    1.0
-         viewport-height 2.0
-         ;; not using aspect-ratio is deliberate here
-         viewport-width  (* viewport-height (/ image-width image-height))
+         theta           (deg->rad vfov)
+         h               (Math/tan (/ theta 2))
+         viewport-height (* 2.0 h focal-length) 
+         viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
          camera-center   (vec3a/make)
          viewport-u      (vec3a/make viewport-width 0.0 0.0)
          viewport-v      (vec3a/make 0.0 (- viewport-height) 0.0) ;; negative because we want upper-left to be zero and increases at we scan down
@@ -104,7 +122,7 @@
                                                          (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
                                        ray-direction (vec3a/subtract pixel-sample camera-center)
                                        a-ray         #::ray{:origin camera-center :direction ray-direction}]
-                                   (ray-color a-ray max-depth hittables))
+                                   (ray-color a-ray max-depth to-render))
                                 (repeatedly samples-per-px)
                                 (reduce vec3a/add)
                                 ((fn [color] (vec3a/divide color samples-per-px)))))]
