@@ -80,10 +80,10 @@
 
 (def hittables2
   [(merge (hittable/sphere (vec3a/make (- R) 0.0 -1.0) R)
-          (material/lambertian (RGB 0 0 1)))
+          (material/lambertian (RGB 0.0 0.0 1.0)))
    ;; right
    (merge (hittable/sphere (vec3a/make R 0.0 -1.0) R)
-          (material/lambertian (RGB 1 0 0)))])
+          (material/lambertian (RGB 1.0 0.0 0.0)))])
 
 ;; unsure if this is a good idea
 ;; what it does: check if local binding have sym, if not, nil instead of error
@@ -94,9 +94,9 @@
 (defmacro vars->map [& vars]
   (zipmap (map (comp keyword name) vars) vars))
 
-(defn -main [samples-per-px max-depth]
-  (let [samples-per-px #?(:clj (or (Integer/parseInt samples-per-px) 100))
-        max-depth      #?(:clj (or (Integer/parseInt max-depth) 50))]
+(defn -main [& args]
+  (let [samples-per-px #?(:clj (or (some-> (first args) Integer/parseInt) 100))
+        max-depth      #?(:clj (or (some-> (second args) Integer/parseInt) 50))]
     (println "config:" (vars->map samples-per-px max-depth))
     (time
      (let [;; image
