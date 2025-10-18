@@ -88,15 +88,17 @@
 (defn -main []
   (time
    (let [;; image
-         to-render       hittables2
-         
+         to-render       hittables
+
          aspect-ratio    16/9
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
          samples-per-px  100
          max-depth       50
          vfov            90.0
-         
+         look-from       (vec3a/make -2.0 2.0 1.0)
+         look-at         (vec3a/make 0.0 0.0 -1.0)
+         vup             (vec3a/make 0.0 1.0 0.0)
 
          ;; camera
          focal-length    1.0
@@ -104,13 +106,18 @@
          h               (Math/tan (/ theta 2))
          viewport-height (* 2.0 h focal-length) 
          viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
-         camera-center   (vec3a/make)
-         viewport-u      (vec3a/make viewport-width 0.0 0.0)
-         viewport-v      (vec3a/make 0.0 (- viewport-height) 0.0) ;; negative because we want upper-left to be zero and increases at we scan down
+
+         w               (vec3a/unit (vec3a/subtract look-from look-at))
+         u               (vec3a/unit (vec3a/cross vup w))
+         v               (vec3a/cross w u)
+
+         camera-center   look-from
+         viewport-u      (vec3a/mult-scalar u viewport-width)
+         viewport-v      (vec3a/mult-scalar (vec3a/negative v) viewport-height) ;; negative because we want upper-left to be zero and increases at we scan down
          pixel-du        (vec3a/divide viewport-u image-width)
          pixel-dv        (vec3a/divide viewport-v image-height)
          upper-left      (-> camera-center
-                             (vec3a/subtract (vec3a/make 0.0 0.0 focal-length))
+                             (vec3a/subtract (vec3a/mult-scalar w focal-length))
                              (vec3a/subtract (vec3a/divide viewport-u 2))
                              (vec3a/subtract (vec3a/divide viewport-v 2)))
          pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
