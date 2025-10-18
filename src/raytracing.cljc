@@ -85,58 +85,70 @@
    (merge (hittable/sphere (vec3a/make R 0.0 -1.0) R)
           (material/lambertian (RGB 1 0 0)))])
 
-(defn -main []
-  (time
-   (let [;; image
-         to-render       hittables
+;; unsure if this is a good idea
+;; what it does: check if local binding have sym, if not, nil instead of error
+;; purpose: to make the inner part of main is still eval-able
+(defmacro local [sym]
+  (first (filter #(= (str sym) (str "(quote " % ")")) (keys &env))))
 
-         aspect-ratio    16/9
-         image-width     400
-         image-height    (int (/ image-width aspect-ratio))
-         samples-per-px  100
-         max-depth       50
-         vfov            20.0
-         look-from       (vec3a/make -2.0 2.0 1.0)
-         look-at         (vec3a/make 0.0 0.0 -1.0)
-         vup             (vec3a/make 0.0 1.0 0.0)
+(defmacro vars->map [& vars]
+  (zipmap (map (comp keyword name) vars) vars))
 
-         ;; camera
-         focal-length    1.0
-         theta           (deg->rad vfov)
-         h               (Math/tan (/ theta 2))
-         viewport-height (* 2.0 h focal-length) 
-         viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
+(defn -main [samples-per-px max-depth]
+  (let [samples-per-px #?(:clj (or (Integer/parseInt samples-per-px) 100))
+        max-depth      #?(:clj (or (Integer/parseInt max-depth) 50))]
+    (println "config:" (vars->map samples-per-px max-depth))
+    (time
+     (let [;; image
+           to-render       hittables
 
-         w               (vec3a/unit (vec3a/subtract look-from look-at))
-         u               (vec3a/unit (vec3a/cross vup w))
-         v               (vec3a/cross w u)
+           aspect-ratio    16/9
+           image-width     400
+           image-height    (int (/ image-width aspect-ratio))
+           samples-per-px  (or (local 'samples-per-px) 100)
+           max-depth       (or (local 'max-depth) 50)
+           vfov            20.0
+           look-from       (vec3a/make -2.0 2.0 1.0)
+           look-at         (vec3a/make 0.0 0.0 -1.0)
+           vup             (vec3a/make 0.0 1.0 0.0)
 
-         camera-center   look-from
-         viewport-u      (vec3a/mult-scalar u viewport-width)
-         viewport-v      (vec3a/mult-scalar (vec3a/negative v) viewport-height) ;; negative because we want upper-left to be zero and increases at we scan down
-         pixel-du        (vec3a/divide viewport-u image-width)
-         pixel-dv        (vec3a/divide viewport-v image-height)
-         upper-left      (-> camera-center
-                             (vec3a/subtract (vec3a/mult-scalar w focal-length))
-                             (vec3a/subtract (vec3a/divide viewport-u 2))
-                             (vec3a/subtract (vec3a/divide viewport-v 2)))
-         pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
+           ;; camera
+           focal-length    1.0
+           theta           (deg->rad vfov)
+           h               (Math/tan (/ theta 2))
+           viewport-height (* 2.0 h focal-length)
+           viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
 
-         colors          (for [j (range image-height)
-                               i (range image-width)]
-                           (->> #(let [pixel-sample  (-> pixel-00-loc
-                                                         (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
-                                                         (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
-                                       ray-direction (vec3a/subtract pixel-sample camera-center)
-                                       a-ray         #::ray{:origin camera-center :direction ray-direction}]
-                                   (ray-color a-ray max-depth to-render))
-                                (repeatedly samples-per-px)
-                                (reduce vec3a/add)
-                                ((fn [color] (vec3a/divide color samples-per-px)))))]
-     #?(:clj
-        (with-open [out (io/writer "scene.ppm")]
-          (.write out (str "P3\n" image-width " " image-height "\n255\n"))
-          (doseq [color colors]
-            (write-color! out color))))
-     #?(:bb  :noop
-        :clj (ppm->png "scene.ppm" "scene.png")))))
+           w               (vec3a/unit (vec3a/subtract look-from look-at))
+           u               (vec3a/unit (vec3a/cross vup w))
+           v               (vec3a/cross w u)
+
+           camera-center   look-from
+           viewport-u      (vec3a/mult-scalar u viewport-width)
+           viewport-v      (vec3a/mult-scalar (vec3a/negative v) viewport-height) ;; negative because we want upper-left to be zero and increases at we scan down
+           pixel-du        (vec3a/divide viewport-u image-width)
+           pixel-dv        (vec3a/divide viewport-v image-height)
+           upper-left      (-> camera-center
+                               (vec3a/subtract (vec3a/mult-scalar w focal-length))
+                               (vec3a/subtract (vec3a/divide viewport-u 2))
+                               (vec3a/subtract (vec3a/divide viewport-v 2)))
+           pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
+
+           colors          (for [j (range image-height)
+                                 i (range image-width)]
+                             (->> #(let [pixel-sample  (-> pixel-00-loc
+                                                           (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
+                                                           (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
+                                         ray-direction (vec3a/subtract pixel-sample camera-center)
+                                         a-ray         #::ray{:origin camera-center :direction ray-direction}]
+                                     (ray-color a-ray max-depth to-render))
+                                  (repeatedly samples-per-px)
+                                  (reduce vec3a/add)
+                                  ((fn [color] (vec3a/divide color samples-per-px)))))]
+       #?(:clj
+          (with-open [out (io/writer "scene.ppm")]
+            (.write out (str "P3\n" image-width " " image-height "\n255\n"))
+            (doseq [color colors]
+              (write-color! out color))))
+       #?(:bb  :noop
+          :clj (ppm->png "scene.ppm" "scene.png"))))))
