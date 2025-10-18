@@ -95,7 +95,7 @@
          image-height    (int (/ image-width aspect-ratio))
          samples-per-px  100
          max-depth       50
-         vfov            90.0
+         vfov            20.0
          look-from       (vec3a/make -2.0 2.0 1.0)
          look-at         (vec3a/make 0.0 0.0 -1.0)
          vup             (vec3a/make 0.0 1.0 0.0)
