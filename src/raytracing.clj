@@ -1,18 +1,17 @@
 (ns raytracing
   (:require
-   #?@(:bb  [[clojure.java.io :as io]]
-       :clj [[clj-async-profiler.core :as prof]
-             [clojure.java.io :as io]
-             [ppm2png :refer [ppm->png]]])
+   #_[clj-async-profiler.core :as prof]
+   [clojure.java.io :as io]
    [hit :as hit]
-   [material :as material]
    [hittable :as hittable]
+   [material :as material]
+   [ppm2png :refer [ppm->png]]
    [ray :as ray]
    [vec3a :as vec3a]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
-#?(:clj (set! *warn-on-reflection* true))
+(set! *warn-on-reflection* true)
 
 (defn clamp [x min-v max-v] (min max-v (max x min-v)))
 
@@ -100,12 +99,11 @@
         (vec3a/add (vec3a/mult-scalar defocus-disk-v (vec3a/y p))))))
 
 (defn -main [& args]
-  (let [samples-per-px #?(:clj (or (some-> (first args) Integer/parseInt) 100))
-        max-depth      #?(:clj (or (some-> (second args) Integer/parseInt) 50))]
+  (let [samples-per-px (or (some-> (first args) Integer/parseInt) 100)
+        max-depth      (or (some-> (second args) Integer/parseInt) 50)]
     (println "config:" (vars->map samples-per-px max-depth))
     (time
-     (#?@(:clj     [prof/profile {:event :alloc}]
-          :default [do])
+     (do #_#_prof/profile {:event :alloc}
       (let [;; image
             to-render       (to-array hittables)
 
@@ -164,10 +162,8 @@
                                                         color)]
                                     (recur (inc k) accum))
                                   (vec3a/divide accum samples-per-px))))]
-        #?(:clj
-           (with-open [out (io/writer "scene.ppm")]
-             (.write out (str "P3\n" image-width " " image-height "\n255\n"))
-             (doseq [color colors]
-               (write-color! out color))))
-        #?(:bb  :noop
-           :clj (ppm->png "scene.ppm" "scene.png")))))))
+        (with-open [out (io/writer "scene.ppm")]
+          (.write out (str "P3\n" image-width " " image-height "\n255\n"))
+          (doseq [color colors]
+            (write-color! out color)))
+        (ppm->png "scene.ppm" "scene.png"))))))
