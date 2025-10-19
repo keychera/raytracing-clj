@@ -7,7 +7,10 @@
    [material :as material]
    [ppm2png :refer [ppm->png]]
    [ray :as ray]
-   [vec3a :as vec3a]))
+   [vec3a :as vec3a])
+  (:import [java.util.concurrent Executors]
+           [java.util.concurrent Callable]
+           [java.util.concurrent Future]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
@@ -74,15 +77,6 @@
    (merge (hittable/sphere (vec3a/make 1.0 0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
-(def R (Math/cos (/ Math/PI 4)))
-
-(def hittables2
-  [(merge (hittable/sphere (vec3a/make (- R) 0.0 -1.0) R)
-          (material/lambertian (RGB 0.0 0.0 1.0)))
-   ;; right
-   (merge (hittable/sphere (vec3a/make R 0.0 -1.0) R)
-          (material/lambertian (RGB 1.0 0.0 0.0)))])
-
 ;; unsure if this is a good idea
 ;; what it does: check if local binding have sym, if not, nil instead of error
 ;; purpose: to make the inner part of main is still eval-able
@@ -144,26 +138,40 @@
             defocus-disk-u  (vec3a/mult-scalar u defocus-radius)
             defocus-disk-v  (vec3a/mult-scalar v defocus-radius)
 
-            colors          (for [j (range image-height)
-                                  i (range image-width)]
-                              (loop [k 0 accum nil]
+            compute-pixel   (fn [i j]
+                              (loop [k 0 accum (vec3a/make)]
                                 (if (< k samples-per-px)
                                   (let [pixel-sample  (-> pixel-00-loc
                                                           (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
-                                                          (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
+                                                          (vec3a/add! (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
                                         ray-origin    (if (<= defocus-angle 0)
                                                         camera-center
                                                         (defocus-disk-sample camera-center defocus-disk-u defocus-disk-v))
                                         ray-direction (vec3a/subtract pixel-sample ray-origin)
                                         a-ray         #::ray{:origin ray-origin :direction ray-direction}
                                         color         (ray-color a-ray max-depth to-render)
-                                        accum         (if accum
-                                                        (vec3a/add accum color)
-                                                        color)]
+                                        accum         (vec3a/add! accum color)]
                                     (recur (inc k) accum))
-                                  (vec3a/divide accum samples-per-px))))]
+                                  (vec3a/divide! accum samples-per-px))))
+
+            pool-size       2
+            executor        (Executors/newFixedThreadPool pool-size)
+            rows            (range image-height)
+            chunk-size      (int (Math/ceil (/ (double image-height) pool-size)))
+            chunks          (partition-all chunk-size rows)
+            futures         (mapv (fn [chunk]
+                                    (.submit executor
+                                             (reify Callable
+                                               (call [_]
+                                                 (mapv (fn [j] (mapv (fn [i] (compute-pixel i j)) (range image-width))) chunk)))))
+                                  chunks)
+            _               (.shutdown executor)
+            rows-per-fut    (mapv #(.get ^Future %) futures)
+            colors-rows     (apply concat rows-per-fut)
+            colors          (apply concat colors-rows)]
         (with-open [out (io/writer "scene.ppm")]
           (.write out (str "P3\n" image-width " " image-height "\n255\n"))
           (doseq [color colors]
             (write-color! out color)))
-        (ppm->png "scene.ppm" "scene.png"))))))
+        (ppm->png "scene.ppm" "scene.png")
+        (shutdown-agents))))))

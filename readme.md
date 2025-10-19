@@ -13,3 +13,8 @@ use clojure
 ```
 clojure -M:main
 ```
+
+
+## note
+
+- still doesn't understand parallelism here, the faster is when I give it size 2 threadpool, why?
