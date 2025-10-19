@@ -1,7 +1,6 @@
 (ns material
   (:require
    [clojure.spec.alpha :as s]
-   [hit :as hit]
    [ray :as ray]
    [vec3a :as vec3a]))
 
@@ -12,7 +11,7 @@
 
 (defn lambertian [^doubles albedo]
   {::scatter-fn
-   (fn lambertian-scatter [_ray {::hit/keys [point normal]}]
+   (fn lambertian-scatter [_ray {:keys [point normal]}]
      (let [scatter   (vec3a/add! (vec3a/random-unit-vec3) normal)
            direction (if (vec3a/near-zero? scatter) normal scatter)]
        {::scattered-ray #::ray{:origin point :direction direction}
@@ -20,7 +19,7 @@
 
 (defn metal [^doubles albedo ^double fuzz]
   {::scatter-fn
-   (fn metal-scatter [{::ray/keys [direction]} {::hit/keys [point normal]}]
+   (fn metal-scatter [{::ray/keys [direction]} {:keys [point normal]}]
      (let [reflected (vec3a/reflect direction normal)
            reflected (vec3a/add! (vec3a/mult-scalar! (vec3a/random-unit-vec3) fuzz) reflected)]
        (when (> (vec3a/dot reflected normal) 0)
@@ -33,7 +32,7 @@
 
 (defn dielectric [refraction-index]
   {::scatter-fn
-   (fn dielectric-scatter [{::ray/keys [direction]} {::hit/keys [front-face? point normal]}]
+   (fn dielectric-scatter [{::ray/keys [direction]} {:keys [front-face? point normal]}]
      (let [ri          (if front-face? (/ 1.0 refraction-index) refraction-index)
            unit-dir    (vec3a/unit direction)
            cos-theta   (min (vec3a/dot (vec3a/negative unit-dir) normal) 1.0)

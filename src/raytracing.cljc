@@ -4,11 +4,11 @@
        :clj [[clj-async-profiler.core :as prof]
              [clojure.java.io :as io]
              [ppm2png :refer [ppm->png]]])
-   [hit :as hit]
-   [material :as material]
    [hittable :as hittable]
+   [material :as material]
    [ray :as ray]
-   [vec3a :as vec3a]))
+   [vec3a :as vec3a])
+  (:import [hittable Hit]))
 
 ;; following https://raytracing.github.io/books/RayTracingInOneWeekend.html
 
@@ -28,23 +28,22 @@
 (defmacro BLACK [] `(vec3a/make))
 (defmacro RGB [r g b] `(vec3a/make ~r ~g ~b))
 
-(defn hit-anything [ray ^"[Lclojure.lang.PersistentArrayMap;" bodies-arr t-min t-max]
+(defn hit-anything ^Hit [ray ^"[Lclojure.lang.PersistentArrayMap;" bodies-arr t-min t-max]
   (let [length (count bodies-arr)]
     (loop [i 0 closest-so-far t-max hit-record nil]
       (if (< i length)
-        (let [body    (aget bodies-arr i)
-              hit-fn  (::hittable/hit-fn body)
-              got-hit (hit-fn body ray t-min closest-so-far)]
+        (let [body         (aget bodies-arr i)
+              ^Hit got-hit (hittable/hit body ray t-min closest-so-far)]
           (if (some? got-hit)
-            (recur (inc i) (::hit/t got-hit) got-hit)
-            (recur (inc i) closest-so-far    hit-record)))
+            (recur (inc i) (:t got-hit) got-hit)
+            (recur (inc i) closest-so-far hit-record)))
         hit-record))))
 
 (defn ray-color [{::ray/keys [^doubles direction] :as ray} depth ^"[Lclojure.lang.PersistentArrayMap;" world-arr]
   (if (<= depth 0)
     (BLACK)
-    (if-let [hit-record (hit-anything ray world-arr 1e-3 ##Inf)]
-      (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
+    (if-let [^Hit hit-record (hit-anything ray world-arr 1e-3 ##Inf)]
+      (let [scatter-fn (some-> hit-record :what ::material/scatter-fn)
             scattered  (when scatter-fn (scatter-fn ray hit-record))]
         (if scattered
           (vec3a/mult-vec3! (ray-color (::material/scattered-ray scattered) (dec depth) world-arr)
@@ -60,28 +59,28 @@
 
 (def hittables
   [;; ground
-   (merge (hittable/sphere (vec3a/make 0.0 -100.5 -1.0) 100.0)
+   (merge (hittable/->Sphere (vec3a/make 0.0 -100.5 -1.0) 100.0)
           (material/lambertian (RGB 0.8 0.8 0.0)))
    ;; center
-   (merge (hittable/sphere (vec3a/make 0.0 0.0 -1.2) 0.5)
+   (merge (hittable/->Sphere (vec3a/make 0.0 0.0 -1.2) 0.5)
           (material/lambertian (RGB 0.1 0.2 0.5)))
    ;; left
-   (merge (hittable/sphere (vec3a/make -1.0 0.0 -1.0) 0.5)
+   (merge (hittable/->Sphere (vec3a/make -1.0 0.0 -1.0) 0.5)
           (material/dielectric 1.5))
    ;; bubble
-   (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.4)
+   (merge (hittable/->Sphere (vec3a/make -1.0  0.0 -1.0) 0.4)
           (material/dielectric (/ 1.00 1.5)))
    ;; right
-   (merge (hittable/sphere (vec3a/make 1.0 0.0 -1.0) 0.5)
+   (merge (hittable/->Sphere (vec3a/make 1.0 0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
 (def R (Math/cos (/ Math/PI 4)))
 
 (def hittables2
-  [(merge (hittable/sphere (vec3a/make (- R) 0.0 -1.0) R)
+  [(merge (hittable/->Sphere (vec3a/make (- R) 0.0 -1.0) R)
           (material/lambertian (RGB 0.0 0.0 1.0)))
    ;; right
-   (merge (hittable/sphere (vec3a/make R 0.0 -1.0) R)
+   (merge (hittable/->Sphere (vec3a/make R 0.0 -1.0) R)
           (material/lambertian (RGB 1.0 0.0 0.0)))])
 
 ;; unsure if this is a good idea
