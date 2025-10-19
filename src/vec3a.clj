@@ -55,11 +55,14 @@
 
 (defn unit ^doubles [^doubles v] (divide v (length v)))
 
+(defn rand-double ^double [^double vmin ^double vmax]
+  (+ vmin (rand (- vmax vmin))))
+
 (defn random-vec3
   (^doubles []
    (make (rand) (rand) (rand)))
   (^doubles [^double vmin ^double vmax]
-   (let [rand-range-fn (fn [] (+ vmin (rand (- vmax vmin))))]
+   (let [rand-range-fn #(rand-double vmin vmax)]
      (make (rand-range-fn) (rand-range-fn) (rand-range-fn)))))
 
 (defn random-unit-vec3 ^doubles []
@@ -76,6 +79,12 @@
     (if (> (dot on-unit-sphere normal) 0.0)
       on-unit-sphere
       (negative on-unit-sphere))))
+
+(defn random-in-unit-disk []
+  (->> (repeatedly #(make (rand-double -1.0 1.0) (rand-double -1.0 1.0) 0))
+       (map (fn [p] (when (< (length-squared p) 1.0) p)))
+       (remove nil?)
+       (first)))
 
 (defn reflect ^doubles [v n]
   (subtract v (mult-scalar n (* 2 (dot v n)))))

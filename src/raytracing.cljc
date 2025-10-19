@@ -27,8 +27,6 @@
 (defmacro BLACK [] `(vec3a/make))
 (defmacro RGB [r g b] `(vec3a/make ~r ~g ~b))
 
-
-
 (defn hit-anything [ray bodies t-min t-max]
   (loop [[body & remaining] bodies
          closest-so-far     t-max
@@ -94,6 +92,12 @@
 (defmacro vars->map [& vars]
   (zipmap (map (comp keyword name) vars) vars))
 
+(defn- defocus-disk-sample [center defocus-disk-u defocus-disk-v]
+  (let [p (vec3a/random-in-unit-disk)]
+    (-> center
+        (vec3a/add (vec3a/mult-scalar defocus-disk-u (vec3a/x p)))
+        (vec3a/add (vec3a/mult-scalar defocus-disk-v (vec3a/y p))))))
+
 (defn -main [& args]
   (let [samples-per-px #?(:clj (or (some-> (first args) Integer/parseInt) 100))
         max-depth      #?(:clj (or (some-> (second args) Integer/parseInt) 50))]
@@ -112,11 +116,12 @@
            look-from       (vec3a/make -2.0 2.0 1.0)
            look-at         (vec3a/make 0.0 0.0 -1.0)
            vup             (vec3a/make 0.0 1.0 0.0)
-           
-           focal-length    (vec3a/length (vec3a/subtract look-from look-at))
+           defocus-angle   10.0
+           focus-dist      3.4
+
            theta           (deg->rad vfov)
            h               (Math/tan (/ theta 2))
-           viewport-height (* 2.0 h focal-length)
+           viewport-height (* 2.0 h focus-dist)
            viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
 
            w               (vec3a/unit (vec3a/subtract look-from look-at))
@@ -129,18 +134,25 @@
            pixel-du        (vec3a/divide viewport-u image-width)
            pixel-dv        (vec3a/divide viewport-v image-height)
            upper-left      (-> camera-center
-                               (vec3a/subtract (vec3a/mult-scalar w focal-length))
+                               (vec3a/subtract (vec3a/mult-scalar w focus-dist))
                                (vec3a/subtract (vec3a/divide viewport-u 2))
                                (vec3a/subtract (vec3a/divide viewport-v 2)))
            pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
+
+           defocus-radius  (* focus-dist (Math/tan (deg->rad (/ defocus-angle 2.0))))
+           defocus-disk-u  (vec3a/mult-scalar u defocus-radius)
+           defocus-disk-v  (vec3a/mult-scalar v defocus-radius)
 
            colors          (for [j (range image-height)
                                  i (range image-width)]
                              (->> #(let [pixel-sample  (-> pixel-00-loc
                                                            (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
                                                            (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
-                                         ray-direction (vec3a/subtract pixel-sample camera-center)
-                                         a-ray         #::ray{:origin camera-center :direction ray-direction}]
+                                         ray-origin    (if (<= defocus-angle 0)
+                                                         camera-center
+                                                         (defocus-disk-sample camera-center defocus-disk-u defocus-disk-v))
+                                         ray-direction (vec3a/subtract pixel-sample ray-origin)
+                                         a-ray         #::ray{:origin ray-origin :direction ray-direction}]
                                      (ray-color a-ray max-depth to-render))
                                   (repeatedly samples-per-px)
                                   (reduce vec3a/add)
