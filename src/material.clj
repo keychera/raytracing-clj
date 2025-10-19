@@ -13,15 +13,16 @@
 (defn lambertian [^doubles albedo]
   {::scatter-fn
    (fn lambertian-scatter [_ray {::hit/keys [point normal]}]
-     (let [scatter-direction (vec3a/add normal (vec3a/random-unit-vec3))]
-       {::scattered-ray #::ray{:origin point :direction scatter-direction}
+     (let [scatter   (vec3a/add! (vec3a/random-unit-vec3) normal)
+           direction (if (vec3a/near-zero? scatter) normal scatter)]
+       {::scattered-ray #::ray{:origin point :direction direction}
         ::attenuation   albedo}))})
 
 (defn metal [^doubles albedo ^double fuzz]
   {::scatter-fn
    (fn metal-scatter [{::ray/keys [direction]} {::hit/keys [point normal]}]
-     (let [reflected (-> (vec3a/reflect direction normal)
-                         (vec3a/add (vec3a/mult-scalar (vec3a/random-unit-vec3) fuzz)))]
+     (let [reflected (vec3a/reflect direction normal)
+           reflected (vec3a/add! (vec3a/mult-scalar! (vec3a/random-unit-vec3) fuzz) reflected)]
        (when (> (vec3a/dot reflected normal) 0)
          {::scattered-ray #::ray{:origin point :direction reflected}
           ::attenuation   albedo})))})
@@ -37,7 +38,7 @@
            unit-dir    (vec3a/unit direction)
            cos-theta   (min (vec3a/dot (vec3a/negative unit-dir) normal) 1.0)
            sin-theta   (Math/sqrt (- 1.0 (* cos-theta cos-theta)))
-           refract?    (<= (* ri sin-theta) 1.0) 
+           refract?    (<= (* ri sin-theta) 1.0)
            direction   (if (or (not refract?) (> (reflectance cos-theta ri) (rand)))
                          (vec3a/reflect unit-dir normal)
                          (vec3a/refract unit-dir normal ri))]

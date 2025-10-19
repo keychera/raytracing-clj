@@ -47,13 +47,13 @@
       (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
             scattered  (when scatter-fn (scatter-fn ray hit-record))]
         (if scattered
-          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world-arr)
-                           (::material/attenuation scattered))
+          (vec3a/mult-vec3! (ray-color (::material/scattered-ray scattered) (dec depth) world-arr)
+                            (::material/attenuation scattered))
           (BLACK)))
       (let [y (vec3a/y (vec3a/unit direction))
             a (* 0.5 (+ y 1.0))]
-        (vec3a/add (vec3a/mult-scalar (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
-                   (vec3a/mult-scalar (vec3a/make 0.5 0.7 1.0) a))))))
+        (vec3a/add! (vec3a/mult-scalar! (vec3a/make 1.0 1.0 1.0) (- 1.0 a))
+                    (vec3a/mult-scalar! (vec3a/make 0.5 0.7 1.0) a))))))
 
 (defn deg->rad [^double d]
   (-> d (* Math/PI) (/ 180.0)))
