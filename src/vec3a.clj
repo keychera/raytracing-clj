@@ -56,35 +56,23 @@
 (defn unit ^doubles [^doubles v] (divide v (length v)))
 
 (defn rand-double ^double [^double vmin ^double vmax]
-  (+ vmin (rand (- vmax vmin))))
-
-(defn random-vec3
-  (^doubles []
-   (make (rand) (rand) (rand)))
-  (^doubles [^double vmin ^double vmax]
-   (let [rand-range-fn #(rand-double vmin vmax)]
-     (make (rand-range-fn) (rand-range-fn) (rand-range-fn)))))
+  (+ vmin (* (- vmax vmin) (rand))))
 
 (defn random-unit-vec3 ^doubles []
-  (->> (repeatedly #(random-vec3 -1.0 1.0))
-       (map (fn [p]
-              (let [lensq (length-squared p)]
-                (when (and (> lensq 1e-160) (<= lensq 1.0))
-                  (divide p (Math/sqrt lensq))))))
-       (remove nil?)
-       (first)))
+  (loop [x (rand-double -1.0 1.0)
+         y (rand-double -1.0 1.0)
+         z (rand-double -1.0 1.0)]
+    (let [lensq (+ (* x x) (* y y) (* z z))]
+      (if (and (> lensq 1e-160) (<= lensq 1.0))
+        (divide (make x y z) (Math/sqrt lensq))
+        (recur (rand-double -1.0 1.0) (rand-double -1.0 1.0) (rand-double -1.0 1.0))))))
 
-(defn random-on-hemisphere ^doubles [^doubles normal]
-  (let [on-unit-sphere (random-unit-vec3)]
-    (if (> (dot on-unit-sphere normal) 0.0)
-      on-unit-sphere
-      (negative on-unit-sphere))))
-
-(defn random-in-unit-disk []
-  (->> (repeatedly #(make (rand-double -1.0 1.0) (rand-double -1.0 1.0) 0))
-       (map (fn [p] (when (< (length-squared p) 1.0) p)))
-       (remove nil?)
-       (first)))
+(defn random-in-unit-disk ^doubles []
+  (loop [x (rand-double -1.0 1.0) y (rand-double -1.0 1.0)]
+    (let [lensq (+ (* x x) (* y y))]
+      (if (< lensq 1.0)
+        (make x y 0.0)
+        (recur (rand-double -1.0 1.0) (rand-double -1.0 1.0))))))
 
 (defn reflect ^doubles [v n]
   (subtract v (mult-scalar n (* 2 (dot v n)))))
@@ -94,14 +82,3 @@
         r'-perpen   (mult-scalar (add uv (mult-scalar n cos-theta)) eta-per-eta')
         r'-parallel (mult-scalar n (- (Math/sqrt (Math/abs (- 1.0 (length-squared r'-perpen))))))]
     (add r'-perpen r'-parallel)))
-
-(comment
-  (require '[clojure.pprint :refer [pprint]])
-
-  (let [op1 (random-unit-vec3)
-        op2 (random-on-hemisphere (random-unit-vec3))
-        res (dot op1 op2)]
-    (pprint res)
-    res))
-
-

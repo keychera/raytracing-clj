@@ -1,7 +1,8 @@
 (ns raytracing
   (:require
    #?@(:bb  [[clojure.java.io :as io]]
-       :clj [[clojure.java.io :as io]
+       :clj [[clj-async-profiler.core :as prof]
+             [clojure.java.io :as io]
              [ppm2png :refer [ppm->png]]])
    [hit :as hit]
    [material :as material]
@@ -27,26 +28,26 @@
 (defmacro BLACK [] `(vec3a/make))
 (defmacro RGB [r g b] `(vec3a/make ~r ~g ~b))
 
-(defn hit-anything [ray bodies t-min t-max]
-  (loop [[body & remaining] bodies
-         closest-so-far     t-max
-         hit-record         nil]
-    (if (some? body)
-      (let [hit-fn  (::hittable/hit-fn body)
-            got-hit (hit-fn body ray t-min closest-so-far)]
-        (if (some? got-hit)
-          (recur remaining (::hit/t got-hit) got-hit)
-          (recur remaining closest-so-far     hit-record)))
-      hit-record)))
+(defn hit-anything [ray ^"[Lclojure.lang.PersistentArrayMap;" bodies-arr t-min t-max]
+  (let [length (count bodies-arr)]
+    (loop [i 0 closest-so-far t-max hit-record nil]
+      (if (< i length)
+        (let [body    (aget bodies-arr i)
+              hit-fn  (::hittable/hit-fn body)
+              got-hit (hit-fn body ray t-min closest-so-far)]
+          (if (some? got-hit)
+            (recur (inc i) (::hit/t got-hit) got-hit)
+            (recur (inc i) closest-so-far    hit-record)))
+        hit-record))))
 
-(defn ray-color [{::ray/keys [^doubles direction] :as ray} depth world]
+(defn ray-color [{::ray/keys [^doubles direction] :as ray} depth ^"[Lclojure.lang.PersistentArrayMap;" world-arr]
   (if (<= depth 0)
     (BLACK)
-    (if-let [hit-record (hit-anything ray world 1e-3 ##Inf)]
+    (if-let [hit-record (hit-anything ray world-arr 1e-3 ##Inf)]
       (let [scatter-fn (some-> hit-record ::hit/what ::material/scatter-fn)
             scattered  (when scatter-fn (scatter-fn ray hit-record))]
         (if scattered
-          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world)
+          (vec3a/mult-vec3 (ray-color (::material/scattered-ray scattered) (dec depth) world-arr)
                            (::material/attenuation scattered))
           (BLACK)))
       (let [y (vec3a/y (vec3a/unit direction))
@@ -59,19 +60,19 @@
 
 (def hittables
   [;; ground
-   (merge (hittable/sphere (vec3a/make  0.0 -100.5 -1.0) 100.0)
+   (merge (hittable/sphere (vec3a/make 0.0 -100.5 -1.0) 100.0)
           (material/lambertian (RGB 0.8 0.8 0.0)))
    ;; center
-   (merge (hittable/sphere (vec3a/make  0.0  0.0 -1.2) 0.5)
+   (merge (hittable/sphere (vec3a/make 0.0 0.0 -1.2) 0.5)
           (material/lambertian (RGB 0.1 0.2 0.5)))
    ;; left
-   (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.5)
+   (merge (hittable/sphere (vec3a/make -1.0 0.0 -1.0) 0.5)
           (material/dielectric 1.5))
    ;; bubble
    (merge (hittable/sphere (vec3a/make -1.0  0.0 -1.0) 0.4)
           (material/dielectric (/ 1.00 1.5)))
    ;; right
-   (merge (hittable/sphere (vec3a/make  1.0  0.0 -1.0) 0.5)
+   (merge (hittable/sphere (vec3a/make 1.0 0.0 -1.0) 0.5)
           (material/metal (RGB 0.8 0.6 0.2) 1.0))])
 
 (def R (Math/cos (/ Math/PI 4)))
@@ -103,64 +104,70 @@
         max-depth      #?(:clj (or (some-> (second args) Integer/parseInt) 50))]
     (println "config:" (vars->map samples-per-px max-depth))
     (time
-     (let [;; image
-           to-render       hittables
+     (#?@(:clj     [prof/profile {:event :alloc}]
+          :default [do])
+      (let [;; image
+            to-render       (to-array hittables)
 
-           ;; camera
-           aspect-ratio    16/9
-           image-width     400
-           image-height    (int (/ image-width aspect-ratio))
-           samples-per-px  (or (local 'samples-per-px) 100)
-           max-depth       (or (local 'max-depth) 50)
-           vfov            20.0
-           look-from       (vec3a/make -2.0 2.0 1.0)
-           look-at         (vec3a/make 0.0 0.0 -1.0)
-           vup             (vec3a/make 0.0 1.0 0.0)
-           defocus-angle   10.0
-           focus-dist      3.4
+            ;; camera
+            aspect-ratio    16/9
+            image-width     400
+            image-height    (int (/ image-width aspect-ratio))
+            samples-per-px  (or (local 'samples-per-px) 100)
+            max-depth       (or (local 'max-depth) 50)
+            vfov            20.0
+            look-from       (vec3a/make -2.0 2.0 1.0)
+            look-at         (vec3a/make 0.0 0.0 -1.0)
+            vup             (vec3a/make 0.0 1.0 0.0)
+            defocus-angle   10.0
+            focus-dist      3.4
 
-           theta           (deg->rad vfov)
-           h               (Math/tan (/ theta 2))
-           viewport-height (* 2.0 h focus-dist)
-           viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
+            theta           (deg->rad vfov)
+            h               (Math/tan (/ theta 2))
+            viewport-height (* 2.0 h focus-dist)
+            viewport-width  (* viewport-height (/ image-width image-height)) ;; not using aspect-ratio is deliberate here
 
-           w               (vec3a/unit (vec3a/subtract look-from look-at))
-           u               (vec3a/unit (vec3a/cross vup w))
-           v               (vec3a/cross w u)
+            w               (vec3a/unit (vec3a/subtract look-from look-at))
+            u               (vec3a/unit (vec3a/cross vup w))
+            v               (vec3a/cross w u)
 
-           camera-center   look-from
-           viewport-u      (vec3a/mult-scalar u viewport-width)
-           viewport-v      (vec3a/mult-scalar (vec3a/negative v) viewport-height) ;; negative because we want upper-left to be zero and increases at we scan down
-           pixel-du        (vec3a/divide viewport-u image-width)
-           pixel-dv        (vec3a/divide viewport-v image-height)
-           upper-left      (-> camera-center
-                               (vec3a/subtract (vec3a/mult-scalar w focus-dist))
-                               (vec3a/subtract (vec3a/divide viewport-u 2))
-                               (vec3a/subtract (vec3a/divide viewport-v 2)))
-           pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
+            camera-center   look-from
+            viewport-u      (vec3a/mult-scalar u viewport-width)
+            viewport-v      (vec3a/mult-scalar (vec3a/negative v) viewport-height) ;; negative because we want upper-left to be zero and increases at we scan down
+            pixel-du        (vec3a/divide viewport-u image-width)
+            pixel-dv        (vec3a/divide viewport-v image-height)
+            upper-left      (-> camera-center
+                                (vec3a/subtract (vec3a/mult-scalar w focus-dist))
+                                (vec3a/subtract (vec3a/divide viewport-u 2))
+                                (vec3a/subtract (vec3a/divide viewport-v 2)))
+            pixel-00-loc    (vec3a/add upper-left (vec3a/mult-scalar (vec3a/add pixel-du pixel-dv) 0.5))
 
-           defocus-radius  (* focus-dist (Math/tan (deg->rad (/ defocus-angle 2.0))))
-           defocus-disk-u  (vec3a/mult-scalar u defocus-radius)
-           defocus-disk-v  (vec3a/mult-scalar v defocus-radius)
+            defocus-radius  (* focus-dist (Math/tan (deg->rad (/ defocus-angle 2.0))))
+            defocus-disk-u  (vec3a/mult-scalar u defocus-radius)
+            defocus-disk-v  (vec3a/mult-scalar v defocus-radius)
 
-           colors          (for [j (range image-height)
-                                 i (range image-width)]
-                             (->> #(let [pixel-sample  (-> pixel-00-loc
-                                                           (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
-                                                           (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
-                                         ray-origin    (if (<= defocus-angle 0)
-                                                         camera-center
-                                                         (defocus-disk-sample camera-center defocus-disk-u defocus-disk-v))
-                                         ray-direction (vec3a/subtract pixel-sample ray-origin)
-                                         a-ray         #::ray{:origin ray-origin :direction ray-direction}]
-                                     (ray-color a-ray max-depth to-render))
-                                  (repeatedly samples-per-px)
-                                  (reduce vec3a/add)
-                                  ((fn [color] (vec3a/divide color samples-per-px)))))]
-       #?(:clj
-          (with-open [out (io/writer "scene.ppm")]
-            (.write out (str "P3\n" image-width " " image-height "\n255\n"))
-            (doseq [color colors]
-              (write-color! out color))))
-       #?(:bb  :noop
-          :clj (ppm->png "scene.ppm" "scene.png"))))))
+            colors          (for [j (range image-height)
+                                  i (range image-width)]
+                              (loop [k 0 accum nil]
+                                (if (< k samples-per-px)
+                                  (let [pixel-sample  (-> pixel-00-loc
+                                                          (vec3a/add (vec3a/mult-scalar pixel-du (+ i (- (rand) 0.5))))
+                                                          (vec3a/add (vec3a/mult-scalar pixel-dv (+ j (- (rand) 0.5)))))
+                                        ray-origin    (if (<= defocus-angle 0)
+                                                        camera-center
+                                                        (defocus-disk-sample camera-center defocus-disk-u defocus-disk-v))
+                                        ray-direction (vec3a/subtract pixel-sample ray-origin)
+                                        a-ray         #::ray{:origin ray-origin :direction ray-direction}
+                                        color         (ray-color a-ray max-depth to-render)
+                                        accum         (if accum
+                                                        (vec3a/add accum color)
+                                                        color)]
+                                    (recur (inc k) accum))
+                                  (vec3a/divide accum samples-per-px))))]
+        #?(:clj
+           (with-open [out (io/writer "scene.ppm")]
+             (.write out (str "P3\n" image-width " " image-height "\n255\n"))
+             (doseq [color colors]
+               (write-color! out color))))
+        #?(:bb  :noop
+           :clj (ppm->png "scene.ppm" "scene.png")))))))
