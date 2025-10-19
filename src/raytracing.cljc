@@ -102,6 +102,7 @@
      (let [;; image
            to-render       hittables
 
+           ;; camera
            aspect-ratio    16/9
            image-width     400
            image-height    (int (/ image-width aspect-ratio))
@@ -111,9 +112,8 @@
            look-from       (vec3a/make -2.0 2.0 1.0)
            look-at         (vec3a/make 0.0 0.0 -1.0)
            vup             (vec3a/make 0.0 1.0 0.0)
-
-           ;; camera
-           focal-length    1.0
+           
+           focal-length    (vec3a/length (vec3a/subtract look-from look-at))
            theta           (deg->rad vfov)
            h               (Math/tan (/ theta 2))
            viewport-height (* 2.0 h focal-length)
