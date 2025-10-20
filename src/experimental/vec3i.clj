@@ -4,20 +4,23 @@
 (defmacro y ^double [^doubles realm i] `(aget ~realm (+ 1 (* ~i 3))))
 (defmacro z ^double [^doubles realm i] `(aget ~realm (+ 2 (* ~i 3))))
 
-(defmacro create! [^doubles realm i x y z]
+(defmacro create! [^doubles realm target x y z]
   `(doto ~realm
-     (aset (* ~i 3) ~x)
-     (aset (+ 1 (* ~i 3)) ~y)
-     (aset (+ 2 (* ~i 3)) ~z)))
+     (aset (* ~target 3) (double ~x))
+     (aset (+ 1 (* ~target 3)) (double ~y))
+     (aset (+ 2 (* ~target 3)) (double ~z))))
 
-(defmacro operator [op ^doubles realm u v target]
+(defmacro operator [op ^doubles realm target u v]
   `(let [u0# (x ~realm ~u) u1# (y ~realm ~u) u2# (z ~realm ~u)
          v0# (x ~realm ~v) v1# (y ~realm ~v) v2# (z ~realm ~v)]
      (create! ~realm ~target (~op u0# v0#) (~op u1# v1#) (~op u2# v2#))))
 
-(defmacro operator-scalar [op ^doubles realm v scalar target]
+(defmacro operator-scalar [op ^doubles realm target v scalar]
   `(let [x# (x ~realm ~v) y# (y ~realm ~v) z# (z ~realm ~v)]
      (create! ~realm ~target (~op x# ~scalar) (~op y# ~scalar) (~op z# ~scalar))))
+
+(defn closure-1 [^doubles realm u1 closure-fn]
+  (closure-fn realm (x realm u1) (y realm u1) (z realm u1)))
 
 ;; return scalar
 (defn length-squared [^doubles realm v]
@@ -32,23 +35,26 @@
      (* (y realm u) (y realm v))
      (* (z realm u) (z realm v))))
 
-;; mutate value on the realm, return realm
-(defn add! [^doubles realm u v target]
-  (operator + realm u v target))
+;; mutate value on the realm, return mutated realm
+(defn copy! [^doubles realm target u]
+  (create! realm target (x realm u) (y realm u) (z realm u)))
 
-(defn subtract! [^doubles realm u v target]
-  (operator - realm u v target))
+(defn add! [^doubles realm target u v]
+  (operator + realm target u v))
 
-(defn mult-vec3! [^doubles realm u v target]
-  (operator * realm u v target))
+(defn subtract! [^doubles realm target u v]
+  (operator - realm target u v))
 
-(defn mult-scalar! [^doubles realm v scalar target]
-  (operator-scalar * realm v scalar target))
+(defn mult-vec3! [^doubles realm target u v]
+  (operator * realm target u v))
 
-(defn divide! [^doubles realm v scalar target]
-  (operator-scalar / realm v scalar target))
+(defn mult-scalar! [^doubles realm target v scalar]
+  (operator-scalar * realm target v scalar))
 
-(defn cross! [^doubles realm u v target]
+(defn divide! ^doubles [^doubles realm target v scalar]
+  (operator-scalar / realm target v scalar))
+
+(defn cross! [^doubles realm target u v]
   (let [u0 (x realm u) u1 (y realm u) u2 (z realm u)
         v0 (x realm v) v1 (y realm v) v2 (z realm v)]
     (create! realm target
@@ -56,9 +62,9 @@
              (- (* u2 v0) (* u0 v2))
              (- (* u0 v1) (* u1 v0)))))
 
-(defn unit-vec3! [^doubles realm v target]
+(defn unit-vec3! [^doubles realm target v]
   (-> realm
-      (divide! v (length realm v) target)))
+      (divide! target v (length realm v))))
 
 
 ;; take a vec3 from the realm
