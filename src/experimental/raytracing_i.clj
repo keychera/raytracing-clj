@@ -13,7 +13,7 @@
 
 (defn sphere [center-i radius]
   {::hit-fn
-   (fn [^doubles realm i> ray-origin ray-direction t-min t-max]
+   (fn hit-sphere! [^doubles realm i> ray-origin ray-direction t-min t-max]
      (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
      (let [a (vec3i/length-squared realm ray-direction)
            h (vec3i/dot realm ray-direction (i> :temp))
@@ -35,17 +35,26 @@
                  (let [front-face? (< (vec3i/dot realm ray-direction (i> :hit-normal)) 0)]
                    (when (not front-face?)
                      (vec3i/mult-scalar! realm (i> :hit-normal) (i> :hit-normal) -1)))
-                 root))))))})
+                 root)))))
+     #_"this mutates :hit-normal and :hit-point")})
 
-(defn ray-color! [^doubles realm i> target ray-origin ray-direction sphere-1]
-  (let [hit-fn (::hit-fn sphere-1)
-        t      (hit-fn realm i> ray-origin ray-direction 1e-3 ##Inf)]
+(defn hit-anything! [realm i> ray-origin ray-direction hittables t-min t-max]
+  (let [length (count hittables)]
+    (loop [i 0 closest-so-far nil]
+      (if (< i length)
+        (let [body    (nth hittables i)
+              hit-fn  (::hit-fn body)
+              t       (hit-fn realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+          (if (some? t)
+            (recur (inc i) t)
+            (recur (inc i) closest-so-far)))
+        closest-so-far))))
+
+(defn ray-color! [^doubles realm i> target ray-origin ray-direction hittables]
+  (let [t (hit-anything! realm i> ray-origin ray-direction hittables 1e-3 ##Inf)]
     (if (some? t)
       (-> realm
-          (ray-at (i> :temp) ray-origin ray-direction t)
-          (vec3i/subtract! (i> :temp) (i> :temp) 0.0 0.0 -1.0)
-          (vec3i/unit-vec3! (i> :temp) (i> :temp))
-          (vec3i/add! (i> :temp) (i> :temp) 1.0 1.0 1.0)
+          (vec3i/add! (i> :temp) (i> :hit-normal) 1.0 1.0 1.0)
           (vec3i/mult-scalar! (i> :temp) (i> :temp) 0.5)
           (vec3i/copy! target (i> :temp)))
       (do (vec3i/unit-vec3! realm (i> :temp) ray-direction)
@@ -95,7 +104,11 @@
 
         sphere-1        (let [circle-i (i> :sphere-1)]
                           (vec3i/create! realm circle-i 0.0 0.0 -1.0)
-                          (sphere circle-i 0.5))]
+                          (sphere circle-i 0.5))
+        sphere-2        (let [circle-i (i> :sphere-2)]
+                          (vec3i/create! realm circle-i 0.0 -100.5 -1.0)
+                          (sphere circle-i 100.0))
+        hittables       [sphere-1 sphere-2]]
 
     (time
      (do (-> realm
@@ -128,7 +141,7 @@
 
                  (vec3i/subtract! (i> :ray-direction) (i> :pixel-center) (i> :camera-center))
 
-                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction) sphere-1)
+                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction) hittables)
 
                  (vec3i/copy! (long (+ i (* j image-width))) (i> :pixel-color)))))))
 
