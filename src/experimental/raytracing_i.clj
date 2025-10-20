@@ -11,31 +11,50 @@
       (vec3i/mult-scalar! target direction t)
       (vec3i/add! target target origin)))
 
-(defn hit-sphere [^doubles realm i> center-i radius ray-origin ray-direction]
-  (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
-  (let [a (vec3i/length-squared realm ray-direction)
-        h (vec3i/dot realm ray-direction (i> :temp))
-        c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
-        discriminant (- (* h h) (* a c))]
-    (when (>= discriminant 0)
-      (/ (- h (Math/sqrt discriminant)) a))))
+(defn sphere [center-i radius]
+  {::hit-fn
+   (fn [^doubles realm i> ray-origin ray-direction t-min t-max]
+     (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
+     (let [a (vec3i/length-squared realm ray-direction)
+           h (vec3i/dot realm ray-direction (i> :temp))
+           c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
+           discriminant (- (* h h) (* a c))]
+       (if (< discriminant 0.0)
+         nil
+         (let [sqrt-d (Math/sqrt discriminant)
+               root   (let [root' (/ (- h sqrt-d) a)]
+                        (if (or (<= root' t-min) (<= t-max root'))
+                          (/ (+ h sqrt-d) a)
+                          root'))]
+           (if (or (<= root t-min) (<= t-max root))
+             nil
+             (do (-> realm
+                     (ray-at (i> :hit-point) ray-origin ray-direction root)
+                     (vec3i/subtract! (i> :temp) (i> :hit-point) center-i)
+                     (vec3i/divide! (i> :hit-normal) (i> :temp) radius))
+                 (let [front-face? (< (vec3i/dot realm ray-direction (i> :hit-normal)) 0)]
+                   (when (not front-face?)
+                     (vec3i/mult-scalar! realm (i> :hit-normal) (i> :hit-normal) -1)))
+                 root))))))})
 
-(defn ray-color! [^doubles realm i> target ray-origin ray-direction]
-  (if-let [t (hit-sphere realm i> (i> :sphere-1) 0.5 ray-origin ray-direction)]
-    (-> realm
-        (ray-at (i> :temp) ray-origin ray-direction t)
-        (vec3i/subtract! (i> :temp) (i> :temp) 0.0 0.0 -1.0)
-        (vec3i/unit-vec3! (i> :temp) (i> :temp))
-        (vec3i/add! (i> :temp) (i> :temp) 1.0 1.0 1.0)
-        (vec3i/mult-scalar! (i> :temp) (i> :temp) 0.5)
-        (vec3i/copy! target (i> :temp)))
-    (do (vec3i/unit-vec3! realm (i> :temp) ray-direction)
-        (let [y (vec3i/y realm (i> :temp))
-              a (* 0.5 (+ y 1.0))
-              r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-              g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-              b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-          (vec3i/create! realm target r g b)))))
+(defn ray-color! [^doubles realm i> target ray-origin ray-direction sphere-1]
+  (let [hit-fn (::hit-fn sphere-1)
+        t      (hit-fn realm i> ray-origin ray-direction 1e-3 ##Inf)]
+    (if (some? t)
+      (-> realm
+          (ray-at (i> :temp) ray-origin ray-direction t)
+          (vec3i/subtract! (i> :temp) (i> :temp) 0.0 0.0 -1.0)
+          (vec3i/unit-vec3! (i> :temp) (i> :temp))
+          (vec3i/add! (i> :temp) (i> :temp) 1.0 1.0 1.0)
+          (vec3i/mult-scalar! (i> :temp) (i> :temp) 0.5)
+          (vec3i/copy! target (i> :temp)))
+      (do (vec3i/unit-vec3! realm (i> :temp) ray-direction)
+          (let [y (vec3i/y realm (i> :temp))
+                a (* 0.5 (+ y 1.0))
+                r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+            (vec3i/create! realm target r g b))))))
 
 (defn create-i> [globals offset]
   (into {} (map-indexed (fn [i v] [v (+ offset i)])) globals))
@@ -50,32 +69,36 @@
         viewport-width  (* viewport-height (/ image-width image-height))
 
         pixel-count     (* image-width image-height)
+        global-vecs     [:camera-center
+                         :viewport-u
+                         :viewport-v
+                         :pixel-du
+                         :pixel-dv
+                         :upper-left
+                         :pixel-00]
+        loop-vecs       [:pixel-center
+                         :ray-direction
+                         :pixel-color]
+        spheres         [:sphere-1
+                         :sphere-2]
+        temporaries     [:temp
+                         :hit-point
+                         :hit-normal]
         i>              (create-i>
-                         [;; global vectors
-                          :camera-center
-                          :viewport-u
-                          :viewport-v
-                          :pixel-du
-                          :pixel-dv
-                          :upper-left
-                          :pixel-00
-
-                          ;; loop vectors
-                          :pixel-center
-                          :ray-direction
-                          :pixel-color
-
-                          :sphere-1
-                          :temp]
+                         (concat global-vecs
+                                 loop-vecs
+                                 spheres
+                                 temporaries)
                          pixel-count)
-
         realm-size      (* (+ pixel-count (count i>)) 3)
-        ^doubles realm  (make-array Double/TYPE realm-size)]
+        ^doubles realm  (make-array Double/TYPE realm-size)
+
+        sphere-1        (let [circle-i (i> :sphere-1)]
+                          (vec3i/create! realm circle-i 0.0 0.0 -1.0)
+                          (sphere circle-i 0.5))]
 
     (time
      (do (-> realm
-             (vec3i/create! (i> :sphere-1) 0.0 0.0 -1.0)
-
              (vec3i/create! (i> :camera-center) 0.0 0.0 0.0)
              (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
              (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
@@ -105,7 +128,7 @@
 
                  (vec3i/subtract! (i> :ray-direction) (i> :pixel-center) (i> :camera-center))
 
-                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction))
+                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction) sphere-1)
 
                  (vec3i/copy! (long (+ i (* j image-width))) (i> :pixel-color)))))))
 
