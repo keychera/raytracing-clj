@@ -52,39 +52,40 @@
         realm-size      (* (+ pixel-count (count i>)) 3)
         ^doubles realm  (make-array Double/TYPE realm-size)]
 
-    (-> realm
-        (vec3i/create! (i> :camera-center) 0.0 0.0 -1.0)
-        (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
-        (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
-        (vec3i/divide! (i> :pixel-du) (i> :viewport-u) image-width)
-        (vec3i/divide! (i> :pixel-dv) (i> :viewport-v) image-height)
+    (time
+     (do (-> realm
+             (vec3i/create! (i> :camera-center) 0.0 0.0 -1.0)
+             (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
+             (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
+             (vec3i/divide! (i> :pixel-du) (i> :viewport-u) image-width)
+             (vec3i/divide! (i> :pixel-dv) (i> :viewport-v) image-height)
 
-        ;; multiple operand is complex to represent currently 
-        (vec3i/create! (i> :temp) 0.0 0.0 focal-length)
-        (vec3i/subtract! (i> :upper-left) (i> :camera-center) (i> :temp))
-        (vec3i/divide! (i> :temp) (i> :viewport-u) 2.0)
-        (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
-        (vec3i/divide! (i> :temp) (i> :viewport-v) 2.0)
-        (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
+             ;; multiple operand is complex to represent currently 
+             (vec3i/create! (i> :temp) 0.0 0.0 focal-length)
+             (vec3i/subtract! (i> :upper-left) (i> :camera-center) (i> :temp))
+             (vec3i/divide! (i> :temp) (i> :viewport-u) 2.0)
+             (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
+             (vec3i/divide! (i> :temp) (i> :viewport-v) 2.0)
+             (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
 
-        (vec3i/add! (i> :temp) (i> :pixel-du) (i> :pixel-dv))
-        (vec3i/divide! (i> :temp) (i> :temp) 2.0)
-        (vec3i/add! (i> :pixel-00) (i> :upper-left) (i> :temp)))
+             (vec3i/add! (i> :temp) (i> :pixel-du) (i> :pixel-dv))
+             (vec3i/divide! (i> :temp) (i> :temp) 2.0)
+             (vec3i/add! (i> :pixel-00) (i> :upper-left) (i> :temp)))
 
-    (dotimes [j image-height]
-      (dotimes [i image-width]
-        (-> realm
-            (vec3i/copy! (i> :pixel-center) (i> :pixel-00))
-            (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) i)
-            (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
-            (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) j)
-            (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
+         (dotimes [j image-height]
+           (dotimes [i image-width]
+             (-> realm
+                 (vec3i/copy! (i> :pixel-center) (i> :pixel-00))
+                 (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) i)
+                 (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
+                 (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) j)
+                 (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
 
-            (vec3i/subtract! (i> :ray-direction) (i> :pixel-center) (i> :camera-center))
+                 (vec3i/subtract! (i> :ray-direction) (i> :pixel-center) (i> :camera-center))
 
-            (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction))
+                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction))
 
-            (vec3i/copy! (long (+ i (* j image-width))) (i> :pixel-color)))))
+                 (vec3i/copy! (long (+ i (* j image-width))) (i> :pixel-color)))))))
 
     (with-open [out (io/writer "scene-i.ppm")]
       (.write out (str "P3\n" image-width " " image-height "\n255\n"))
