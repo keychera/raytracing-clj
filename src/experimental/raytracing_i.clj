@@ -1,6 +1,6 @@
 (ns experimental.raytracing-i
   (:require
-   [clj-async-profiler.core :as prof]
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [experimental.vec3i :as vec3i]))
 
@@ -70,8 +70,7 @@
   (into {} (map-indexed (fn [i v] [v (* 3 (+ offset i))])) globals))
 
 (defn -main []
-  (prof/profile
-   {:event :alloc}
+  (do #_#_prof/profile {:event :alloc}
    (let [aspect-ratio    16/9
          image-width     400
          image-height    (int (/ image-width aspect-ratio))

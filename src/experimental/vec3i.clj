@@ -1,5 +1,7 @@
 (ns experimental.vec3i)
 
+(set! *unchecked-math* true) ;; for perf
+
 (defn x ^double [^doubles realm ^long i] (aget realm i))
 (defn y ^double [^doubles realm ^long i] (aget realm (+ 1 i)))
 (defn z ^double [^doubles realm ^long i] (aget realm (+ 2 i)))
