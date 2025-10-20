@@ -13,12 +13,12 @@
 
 (defn hit-sphere [^doubles realm i> center-i radius ray-origin ray-direction]
   (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
-  (let [a (vec3i/dot realm ray-direction ray-direction)
-        b (* -2.0 (vec3i/dot realm ray-direction (i> :temp)))
+  (let [a (vec3i/length-squared realm ray-direction)
+        h (vec3i/dot realm ray-direction (i> :temp))
         c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
-        discriminant (- (* b b) (* 4 a c))]
+        discriminant (- (* h h) (* a c))]
     (when (>= discriminant 0)
-      (/ (- (- b) (Math/sqrt discriminant)) (* 2.0 a)))))
+      (/ (- h (Math/sqrt discriminant)) a))))
 
 (defn ray-color! [^doubles realm i> target ray-origin ray-direction]
   (if-let [t (hit-sphere realm i> (i> :sphere-1) 0.5 ray-origin ray-direction)]
