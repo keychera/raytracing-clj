@@ -72,6 +72,7 @@
   (let [aspect-ratio    16/9
         image-width     400
         image-height    (int (/ image-width aspect-ratio))
+        samples-per-px  100
 
         focal-length    1.0
         viewport-height 2.0
@@ -85,9 +86,10 @@
                          :pixel-dv
                          :upper-left
                          :pixel-00]
-        loop-vecs       [:pixel-center
-                         :ray-direction
-                         :pixel-color]
+        loop-vecs       [::pixel-sample
+                         ::ray-origin
+                         ::ray-direction
+                         ::pixel-color]
         spheres         [:sphere-1
                          :sphere-2]
         temporaries     [:temp
@@ -132,18 +134,22 @@
 
          (dotimes [j image-height]
            (dotimes [i image-width]
-             (-> realm
-                 (vec3i/copy! (i> :pixel-center) (i> :pixel-00))
-                 (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) i)
-                 (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
-                 (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) j)
-                 (vec3i/add! (i> :pixel-center) (i> :pixel-center) (i> :temp))
+             (vec3i/create! realm (i> ::pixel-color) 0.0 0.0 0.0)
+             (dotimes [_ samples-per-px]
+               (-> realm
+                   (vec3i/copy! (i> ::pixel-sample) (i> :pixel-00))
+                   (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) (+ i (- (rand) 0.5)))
+                   (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
+                   (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) (+ j (- (rand) 0.5)))
+                   (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
 
-                 (vec3i/subtract! (i> :ray-direction) (i> :pixel-center) (i> :camera-center))
+                   (vec3i/copy! (i> ::ray-origin) (i> :camera-center))
+                   (vec3i/subtract! (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
 
-                 (ray-color! i> (i> :pixel-color) (i> :camera-center) (i> :ray-direction) hittables)
-
-                 (vec3i/copy! (long (+ i (* j image-width))) (i> :pixel-color)))))))
+                   ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
+                   (ray-color! i> (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction) hittables)
+                   (vec3i/add! (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample))))
+             (vec3i/divide! realm (long (+ i (* j image-width))) (i> ::pixel-color) samples-per-px)))))
 
     (with-open [out (io/writer "scene-i.ppm")]
       (.write out (str "P3\n" image-width " " image-height "\n255\n"))
