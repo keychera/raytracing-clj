@@ -6,17 +6,24 @@
 (set! *warn-on-reflection* true)
 
 ;; hmm maybe this is a bad idea... but I want to do it....
-(defn ray-color! [^doubles realm i> target ray-center ray-direction]
-  (-> realm
-      (vec3i/unit-vec3! (i> :temp) ray-direction)
-      (vec3i/closure-1
-       (i> :temp)
-       (fn [^doubles realm _ y _]
-         (let [a (* 0.5 (+ y 1.0))
-               r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-               g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-               b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-           (vec3i/create! realm target r g b))))))
+(defn hit-sphere? [^doubles realm i> center-i radius ray-origin ray-direction]
+  (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
+  (let [a (vec3i/dot realm ray-direction ray-direction)
+        b (* -2.0 (vec3i/dot realm ray-direction (i> :temp)))
+        c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
+        discriminant (- (* b b) (* 4 a c))]
+    (>= discriminant 0)))
+
+(defn ray-color! [^doubles realm i> target ray-origin ray-direction]
+  (if (hit-sphere? realm i> (i> :sphere-1) 0.5 ray-origin ray-direction)
+    (vec3i/create! realm target 1.0 0.0 0.0)
+    (do (vec3i/unit-vec3! realm (i> :temp) ray-direction)
+        (let [y (vec3i/y realm (i> :temp))
+              a (* 0.5 (+ y 1.0))
+              r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+              g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+              b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+          (vec3i/create! realm target r g b)))))
 
 (defn create-i> [globals offset]
   (into {} (map-indexed (fn [i v] [v (+ offset i)])) globals))
@@ -46,6 +53,7 @@
                           :ray-direction
                           :pixel-color
 
+                          :sphere-1
                           :temp]
                          pixel-count)
 
@@ -54,7 +62,9 @@
 
     (time
      (do (-> realm
-             (vec3i/create! (i> :camera-center) 0.0 0.0 -1.0)
+             (vec3i/create! (i> :sphere-1) 0.0 0.0 -1.0)
+
+             (vec3i/create! (i> :camera-center) 0.0 0.0 0.0)
              (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
              (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
              (vec3i/divide! (i> :pixel-du) (i> :viewport-u) image-width)
