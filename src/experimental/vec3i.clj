@@ -31,7 +31,7 @@
 (defn length ^double [^doubles realm v]
   (Math/sqrt (length-squared realm v)))
 
-(defn dot [^doubles realm ^doubles u ^doubles v]
+(defn dot ^double [^doubles realm ^doubles u ^doubles v]
   (+ (* (x realm u) (x realm v))
      (* (y realm u) (y realm v))
      (* (z realm u) (z realm v))))
@@ -69,10 +69,9 @@
              (- (* u2 v0) (* u0 v2))
              (- (* u0 v1) (* u1 v0)))))
 
-(defn unit-vec3! [^doubles realm target v]
+(defn unit-vec3! [^doubles realm ^doubles target v]
   (-> realm
       (divide! target v (length realm v))))
-
 
 ;; take a vec3 from the realm
 (defn read! [^doubles realm i]

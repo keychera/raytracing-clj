@@ -1,6 +1,6 @@
 (ns experimental.raytracing-i
   (:require
-   #_[clj-async-profiler.core :as prof]
+   [clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [experimental.vec3i :as vec3i]))
 
@@ -12,7 +12,7 @@
       (vec3i/mult-scalar! target direction t)
       (vec3i/add! target target origin)))
 
-(defn sphere [center-i radius]
+(defn sphere [center-i ^double radius]
   {::hit-fn
    (fn hit-sphere! [^doubles realm i> ray-origin ray-direction t-min t-max]
      (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
@@ -41,15 +41,15 @@
 
 (defn hit-anything! [realm i> ray-origin ray-direction hittables t-min t-max]
   (let [length (count hittables)]
-    (loop [i 0 closest-so-far nil]
+    (loop [i 0 found? false closest-so-far t-max]
       (if (< i length)
         (let [body    (nth hittables i)
               hit-fn  (::hit-fn body)
               t       (hit-fn realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
           (if (some? t)
-            (recur (inc i) t)
-            (recur (inc i) closest-so-far)))
-        closest-so-far))))
+            (recur (inc i) true t)
+            (recur (inc i) found? closest-so-far)))
+        (when found? closest-so-far)))))
 
 (defn ray-color! [^doubles realm i> target ray-origin ray-direction hittables]
   (let [t (hit-anything! realm i> ray-origin ray-direction hittables 1e-3 ##Inf)]
@@ -70,11 +70,13 @@
   (into {} (map-indexed (fn [i v] [v (* 3 (+ offset i))])) globals))
 
 (defn -main []
-  (do #_#_prof/profile {:event :alloc}
+  (prof/profile
+   {:event :alloc}
    (let [aspect-ratio    16/9
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
          samples-per-px  100
+         pixel-scale     (/ 1 samples-per-px)
 
          focal-length    1.0
          viewport-height 2.0
@@ -151,7 +153,7 @@
                     ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
                     (ray-color! i> (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction) hittables)
                     (vec3i/add! (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample))))
-              (vec3i/divide! realm (long (* 3 (+ i (* j image-width)))) (i> ::pixel-color) samples-per-px)))))
+              (vec3i/mult-scalar! realm (long (* 3 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)))))
 
      (with-open [out (io/writer "scene-i.ppm")]
        (.write out (str "P3\n" image-width " " image-height "\n255\n"))
