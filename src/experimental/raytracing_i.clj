@@ -1,5 +1,6 @@
 (ns experimental.raytracing-i
   (:require
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [experimental.vec3i :as vec3i]))
 
@@ -66,96 +67,97 @@
             (vec3i/create! realm target r g b))))))
 
 (defn create-i> [globals offset]
-  (into {} (map-indexed (fn [i v] [v (+ offset i)])) globals))
+  (into {} (map-indexed (fn [i v] [v (* 3 (+ offset i))])) globals))
 
 (defn -main []
-  (let [aspect-ratio    16/9
-        image-width     400
-        image-height    (int (/ image-width aspect-ratio))
-        samples-per-px  100
+  (do #_#_prof/profile {:event :alloc}
+   (let [aspect-ratio    16/9
+         image-width     400
+         image-height    (int (/ image-width aspect-ratio))
+         samples-per-px  100
 
-        focal-length    1.0
-        viewport-height 2.0
-        viewport-width  (* viewport-height (/ image-width image-height))
+         focal-length    1.0
+         viewport-height 2.0
+         viewport-width  (* viewport-height (/ image-width image-height))
 
-        pixel-count     (* image-width image-height)
-        global-vecs     [:camera-center
-                         :viewport-u
-                         :viewport-v
-                         :pixel-du
-                         :pixel-dv
-                         :upper-left
-                         :pixel-00]
-        loop-vecs       [::pixel-sample
-                         ::ray-origin
-                         ::ray-direction
-                         ::pixel-color]
-        spheres         [:sphere-1
-                         :sphere-2]
-        temporaries     [:temp
-                         :hit-point
-                         :hit-normal]
-        i>              (create-i>
-                         (concat global-vecs
-                                 loop-vecs
-                                 spheres
-                                 temporaries)
-                         pixel-count)
-        realm-size      (* (+ pixel-count (count i>)) 3)
-        ^doubles realm  (make-array Double/TYPE realm-size)
+         pixel-count     (* image-width image-height)
+         global-vecs     [:camera-center
+                          :viewport-u
+                          :viewport-v
+                          :pixel-du
+                          :pixel-dv
+                          :upper-left
+                          :pixel-00]
+         loop-vecs       [::pixel-sample
+                          ::ray-origin
+                          ::ray-direction
+                          ::pixel-color]
+         spheres         [:sphere-1
+                          :sphere-2]
+         temporaries     [:temp
+                          :hit-point
+                          :hit-normal]
+         i>              (create-i>
+                          (concat global-vecs
+                                  loop-vecs
+                                  spheres
+                                  temporaries)
+                          pixel-count)
+         realm-size      (* (+ pixel-count (count i>)) 3)
+         ^doubles realm  (make-array Double/TYPE realm-size)
 
-        sphere-1        (let [circle-i (i> :sphere-1)]
-                          (vec3i/create! realm circle-i 0.0 0.0 -1.0)
-                          (sphere circle-i 0.5))
-        sphere-2        (let [circle-i (i> :sphere-2)]
-                          (vec3i/create! realm circle-i 0.0 -100.5 -1.0)
-                          (sphere circle-i 100.0))
-        hittables       [sphere-1 sphere-2]]
+         sphere-1        (let [circle-i (i> :sphere-1)]
+                           (vec3i/create! realm circle-i 0.0 0.0 -1.0)
+                           (sphere circle-i 0.5))
+         sphere-2        (let [circle-i (i> :sphere-2)]
+                           (vec3i/create! realm circle-i 0.0 -100.5 -1.0)
+                           (sphere circle-i 100.0))
+         hittables       [sphere-1 sphere-2]]
 
-    (time
-     (do (-> realm
-             (vec3i/create! (i> :camera-center) 0.0 0.0 0.0)
-             (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
-             (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
-             (vec3i/divide! (i> :pixel-du) (i> :viewport-u) image-width)
-             (vec3i/divide! (i> :pixel-dv) (i> :viewport-v) image-height)
+     (time
+      (do (-> realm
+              (vec3i/create! (i> :camera-center) 0.0 0.0 0.0)
+              (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
+              (vec3i/create! (i> :viewport-v) 0.0 (- viewport-height) 0.0)
+              (vec3i/divide! (i> :pixel-du) (i> :viewport-u) image-width)
+              (vec3i/divide! (i> :pixel-dv) (i> :viewport-v) image-height)
 
-             ;; multiple operand is complex to represent currently 
-             (vec3i/create! (i> :temp) 0.0 0.0 focal-length)
-             (vec3i/subtract! (i> :upper-left) (i> :camera-center) (i> :temp))
-             (vec3i/divide! (i> :temp) (i> :viewport-u) 2.0)
-             (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
-             (vec3i/divide! (i> :temp) (i> :viewport-v) 2.0)
-             (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
+              ;; multiple operand is complex to represent currently 
+              (vec3i/create! (i> :temp) 0.0 0.0 focal-length)
+              (vec3i/subtract! (i> :upper-left) (i> :camera-center) (i> :temp))
+              (vec3i/divide! (i> :temp) (i> :viewport-u) 2.0)
+              (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
+              (vec3i/divide! (i> :temp) (i> :viewport-v) 2.0)
+              (vec3i/subtract! (i> :upper-left) (i> :upper-left) (i> :temp))
 
-             (vec3i/add! (i> :temp) (i> :pixel-du) (i> :pixel-dv))
-             (vec3i/divide! (i> :temp) (i> :temp) 2.0)
-             (vec3i/add! (i> :pixel-00) (i> :upper-left) (i> :temp)))
+              (vec3i/add! (i> :temp) (i> :pixel-du) (i> :pixel-dv))
+              (vec3i/divide! (i> :temp) (i> :temp) 2.0)
+              (vec3i/add! (i> :pixel-00) (i> :upper-left) (i> :temp)))
 
-         (dotimes [j image-height]
-           (dotimes [i image-width]
-             (vec3i/create! realm (i> ::pixel-color) 0.0 0.0 0.0)
-             (dotimes [_ samples-per-px]
-               (-> realm
-                   (vec3i/copy! (i> ::pixel-sample) (i> :pixel-00))
-                   (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) (+ i (- (rand) 0.5)))
-                   (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
-                   (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) (+ j (- (rand) 0.5)))
-                   (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
+          (dotimes [j image-height]
+            (dotimes [i image-width]
+              (vec3i/create! realm (i> ::pixel-color) 0.0 0.0 0.0)
+              (dotimes [_ samples-per-px]
+                (-> realm
+                    (vec3i/copy! (i> ::pixel-sample) (i> :pixel-00))
+                    (vec3i/mult-scalar! (i> :temp) (i> :pixel-du) (+ i (- (rand) 0.5)))
+                    (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
+                    (vec3i/mult-scalar! (i> :temp) (i> :pixel-dv) (+ j (- (rand) 0.5)))
+                    (vec3i/add! (i> ::pixel-sample) (i> ::pixel-sample) (i> :temp))
 
-                   (vec3i/copy! (i> ::ray-origin) (i> :camera-center))
-                   (vec3i/subtract! (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
+                    (vec3i/copy! (i> ::ray-origin) (i> :camera-center))
+                    (vec3i/subtract! (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
 
-                   ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
-                   (ray-color! i> (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction) hittables)
-                   (vec3i/add! (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample))))
-             (vec3i/divide! realm (long (+ i (* j image-width))) (i> ::pixel-color) samples-per-px)))))
+                    ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
+                    (ray-color! i> (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction) hittables)
+                    (vec3i/add! (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample))))
+              (vec3i/divide! realm (long (* 3 (+ i (* j image-width)))) (i> ::pixel-color) samples-per-px)))))
 
-    (with-open [out (io/writer "scene-i.ppm")]
-      (.write out (str "P3\n" image-width " " image-height "\n255\n"))
-      (dotimes [j image-height]
-        (dotimes [i image-width]
-          (let [[r g b] (->> (vec3i/read! realm (long (+ i (* j image-width))))
-                             (map #(int (* 255.999 %))))]
-            (.write out (str r " " g " " b "\n"))))))))
+     (with-open [out (io/writer "scene-i.ppm")]
+       (.write out (str "P3\n" image-width " " image-height "\n255\n"))
+       (dotimes [j image-height]
+         (dotimes [i image-width]
+           (let [[r g b] (->> (vec3i/read! realm (long (* 3 (+ i (* j image-width)))))
+                              (map #(int (* 255.999 %))))]
+             (.write out (str r " " g " " b "\n")))))))))
 

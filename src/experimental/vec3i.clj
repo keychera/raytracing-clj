@@ -1,14 +1,14 @@
 (ns experimental.vec3i)
 
-(defmacro x ^double [^doubles realm i] `(aget ~realm (* ~i 3)))
-(defmacro y ^double [^doubles realm i] `(aget ~realm (+ 1 (* ~i 3))))
-(defmacro z ^double [^doubles realm i] `(aget ~realm (+ 2 (* ~i 3))))
+(defn x ^double [^doubles realm ^long i] (aget realm i))
+(defn y ^double [^doubles realm ^long i] (aget realm (+ 1 i)))
+(defn z ^double [^doubles realm ^long i] (aget realm (+ 2 i)))
 
 (defmacro create! [^doubles realm target x y z]
   `(doto ~realm
-     (aset (* ~target 3) (double ~x))
-     (aset (+ 1 (* ~target 3)) (double ~y))
-     (aset (+ 2 (* ~target 3)) (double ~z))))
+     (aset ~target (double ~x))
+     (aset (+ 1 ~target) (double ~y))
+     (aset (+ 2 ~target) (double ~z))))
 
 (defmacro operator [op ^doubles realm target u v]
   `(let [u0# (x ~realm ~u) u1# (y ~realm ~u) u2# (z ~realm ~u)
@@ -23,18 +23,15 @@
   `(let [x# (x ~realm ~v) y# (y ~realm ~v) z# (z ~realm ~v)]
      (create! ~realm ~target (~op x# ~scalar) (~op y# ~scalar) (~op z# ~scalar))))
 
-(defn closure-1 [^doubles realm u1 closure-fn]
-  (closure-fn realm (x realm u1) (y realm u1) (z realm u1)))
-
 ;; return scalar
-(defn length-squared [^doubles realm v]
+(defn length-squared ^double [^doubles realm v]
   (let [x (x realm v) y (y realm v) z (z realm v)]
     (+ (* x x) (* y y) (* z z))))
 
-(defn length [^doubles realm v]
+(defn length ^double [^doubles realm v]
   (Math/sqrt (length-squared realm v)))
 
-(defn dot [^doubles realm u v]
+(defn dot [^doubles realm ^doubles u ^doubles v]
   (+ (* (x realm u) (x realm v))
      (* (y realm u) (y realm v))
      (* (z realm u) (z realm v))))
