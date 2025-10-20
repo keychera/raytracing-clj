@@ -3,10 +3,12 @@
    [clojure.java.io :as io]
    [experimental.vec3i :as vec3i]))
 
+(set! *warn-on-reflection* true)
+
 (defn -main []
-  (let [image-width  256.0
-        image-height 256.0
-        realm        (make-array Double/TYPE (* image-width image-height 3))]
+  (let [image-width    256.0
+        image-height   256.0
+        ^doubles realm (make-array Double/TYPE (* image-width image-height 3))]
     (dotimes [j image-height]
       (dotimes [i image-width]
         (vec3i/create! realm (long (+ i (* j image-width))) (/ i image-width) (/ j image-width) 0.0)))
