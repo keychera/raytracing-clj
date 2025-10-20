@@ -15,6 +15,10 @@
          v0# (x ~realm ~v) v1# (y ~realm ~v) v2# (z ~realm ~v)]
      (create! ~realm ~target (~op u0# v0#) (~op u1# v1#) (~op u2# v2#))))
 
+(defmacro operator-xyz [op ^doubles realm target u x y z]
+  `(let [u0# (x ~realm ~u) u1# (y ~realm ~u) u2# (z ~realm ~u)]
+     (create! ~realm ~target (~op u0# ~x) (~op u1# ~y) (~op u2# ~z))))
+
 (defmacro operator-scalar [op ^doubles realm target v scalar]
   `(let [x# (x ~realm ~v) y# (y ~realm ~v) z# (z ~realm ~v)]
      (create! ~realm ~target (~op x# ~scalar) (~op y# ~scalar) (~op z# ~scalar))))
@@ -39,11 +43,17 @@
 (defn copy! [^doubles realm target u]
   (create! realm target (x realm u) (y realm u) (z realm u)))
 
-(defn add! [^doubles realm target u v]
-  (operator + realm target u v))
+(defn add!
+  ([^doubles realm target u v]
+   (operator + realm target u v))
+  ([^doubles realm target u x y z]
+   (operator-xyz + realm target u x y z)))
 
-(defn subtract! [^doubles realm target u v]
-  (operator - realm target u v))
+(defn subtract!
+  ([^doubles realm target u v]
+   (operator - realm target u v))
+  ([^doubles realm target u x y z]
+   (operator-xyz - realm target u x y z)))
 
 (defn mult-vec3! [^doubles realm target u v]
   (operator * realm target u v))

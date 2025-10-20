@@ -6,17 +6,29 @@
 (set! *warn-on-reflection* true)
 
 ;; hmm maybe this is a bad idea... but I want to do it....
-(defn hit-sphere? [^doubles realm i> center-i radius ray-origin ray-direction]
+(defn ray-at [realm target origin direction t]
+  (-> realm
+      (vec3i/mult-scalar! target direction t)
+      (vec3i/add! target target origin)))
+
+(defn hit-sphere [^doubles realm i> center-i radius ray-origin ray-direction]
   (-> realm (vec3i/subtract! (i> :temp) center-i ray-origin))
   (let [a (vec3i/dot realm ray-direction ray-direction)
         b (* -2.0 (vec3i/dot realm ray-direction (i> :temp)))
         c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
         discriminant (- (* b b) (* 4 a c))]
-    (>= discriminant 0)))
+    (when (>= discriminant 0)
+      (/ (- (- b) (Math/sqrt discriminant)) (* 2.0 a)))))
 
 (defn ray-color! [^doubles realm i> target ray-origin ray-direction]
-  (if (hit-sphere? realm i> (i> :sphere-1) 0.5 ray-origin ray-direction)
-    (vec3i/create! realm target 1.0 0.0 0.0)
+  (if-let [t (hit-sphere realm i> (i> :sphere-1) 0.5 ray-origin ray-direction)]
+    (-> realm
+        (ray-at (i> :temp) ray-origin ray-direction t)
+        (vec3i/subtract! (i> :temp) (i> :temp) 0.0 0.0 -1.0)
+        (vec3i/unit-vec3! (i> :temp) (i> :temp))
+        (vec3i/add! (i> :temp) (i> :temp) 1.0 1.0 1.0)
+        (vec3i/mult-scalar! (i> :temp) (i> :temp) 0.5)
+        (vec3i/copy! target (i> :temp)))
     (do (vec3i/unit-vec3! realm (i> :temp) ray-direction)
         (let [y (vec3i/y realm (i> :temp))
               a (* 0.5 (+ y 1.0))
