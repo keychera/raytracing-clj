@@ -35,7 +35,7 @@
 (defn length ^double [^doubles realm v]
   (Math/sqrt (length-squared realm v)))
 
-(defn dot ^double [^doubles realm ^doubles u ^doubles v]
+(defn dot ^double [^doubles realm u v]
   (+ (* (x realm u) (x realm v))
      (* (y realm u) (y realm v))
      (* (z realm u) (z realm v))))

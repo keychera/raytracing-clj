@@ -14,48 +14,50 @@
     (vec3i/mult-scalar! target direction t)
     (vec3i/add! target target origin)))
 
-(defn sphere [center-i ^double radius]
-  {::hit-fn
-   (fn hit-sphere! [^doubles realm i> ray-origin ray-direction t-min t-max]
-     (doto realm (vec3i/subtract! (i> :temp) center-i ray-origin))
-     (let [a (vec3i/length-squared realm ray-direction)
-           h (vec3i/dot realm ray-direction (i> :temp))
-           c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
-           discriminant (- (* h h) (* a c))]
-       (if (< discriminant 0.0)
-         nil
-         (let [sqrt-d (Math/sqrt discriminant)
-               root   (let [root' (/ (- h sqrt-d) a)]
-                        (if (or (<= root' t-min) (<= t-max root'))
-                          (/ (+ h sqrt-d) a)
-                          root'))]
-           (if (or (<= root t-min) (<= t-max root))
-             nil
-             (do (doto realm
-                   (ray-at (i> :hit-point) ray-origin ray-direction root)
-                   (vec3i/subtract! (i> :temp) (i> :hit-point) center-i)
-                   (vec3i/divide! (i> :hit-normal) (i> :temp) radius))
-                 (let [front-face? (< (vec3i/dot realm ray-direction (i> :hit-normal)) 0)]
-                   (when (not front-face?)
-                     (vec3i/mult-scalar! realm (i> :hit-normal) (i> :hit-normal) -1)))
-                 root)))))
-     #_"this mutates :hit-normal and :hit-point")})
+(definterface Hittable
+  (^double hit [^doubles realm i> ray-origin ray-direction ^double t-min ^double t-max]))
+
+(deftype Sphere [center-i ^double radius]
+  Hittable
+  (^double hit [_this ^doubles realm i> ray-origin ray-direction ^double t-min ^double t-max]
+    (doto realm (vec3i/subtract! (i> :temp) center-i ray-origin))
+    (let [a (double (vec3i/length-squared realm ray-direction))
+          h (vec3i/dot realm ray-direction (i> :temp))
+          c (- (vec3i/dot realm (i> :temp) (i> :temp)) (* radius radius))
+          discriminant (- (* h h) (* a c))]
+      (if (< discriminant 0.0)
+        -1.0
+        (let [sqrt-d (Math/sqrt discriminant)
+              root   (let [root' (/ (- h sqrt-d) a)]
+                       (if (or (<= root' t-min) (<= t-max root'))
+                         (/ (+ h sqrt-d) a)
+                         root'))]
+          (if (or (<= root t-min) (<= t-max root))
+            -1.0
+            (do (doto realm
+                  (ray-at (i> :hit-point) ray-origin ray-direction root)
+                  (vec3i/subtract! (i> :temp) (i> :hit-point) center-i)
+                  (vec3i/divide! (i> :hit-normal) (i> :temp) radius))
+                (let [front-face? (< (vec3i/dot realm ray-direction (i> :hit-normal)) 0)]
+                  (when (not front-face?)
+                    (vec3i/mult-scalar! realm (i> :hit-normal) (i> :hit-normal) -1)))
+                root)))))
+    #_"this mutates :hit-normal and :hit-point"))
 
 (defn hit-anything! [realm i> ray-origin ray-direction hittables t-min t-max]
   (let [length (count hittables)]
-    (loop [i 0 found? false closest-so-far t-max]
+    (loop [i 0 found? false ^double closest-so-far t-max]
       (if (< i length)
-        (let [body    (nth hittables i)
-              hit-fn  (::hit-fn body)
-              t       (hit-fn realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
-          (if (some? t)
+        (let [^Hittable hittable (:hittable (nth hittables i))
+              t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+          (if (> t 0.0)
             (recur (inc i) true t)
             (recur (inc i) found? closest-so-far)))
-        (when found? closest-so-far)))))
+        (if found? closest-so-far -1.0)))))
 
 (defn ray-color! [^doubles realm i> target ray-origin ray-direction hittables]
-  (let [t (hit-anything! realm i> ray-origin ray-direction hittables 1e-3 ##Inf)]
-    (if (some? t)
+  (let [^double t (hit-anything! realm i> ray-origin ray-direction hittables 1e-3 ##Inf)]
+    (if (> t 0.0)
       (doto realm
         (vec3i/create! (i> :temp) 1.0 1.0 1.0)
         (vec3i/add! (i> :temp) (i> :hit-normal) (i> :temp))
@@ -70,12 +72,13 @@
             (vec3i/create! realm target r g b))))))
 
 (defn create-i> [globals offset]
-  (into {} (map-indexed (fn [i v] [v (* 3 (+ offset i))])) globals))
+  (let [offset (long offset)]
+    (into {} (map-indexed (fn [i v] [v (* 3 (+ offset (long i)))])) globals)))
 
 (defn -main []
   (prof/profile
    {:event :alloc}
-   (let [aspect-ratio    16/9
+   (let [aspect-ratio    (double 16/9)
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
          samples-per-px  100
@@ -83,7 +86,7 @@
 
          focal-length    1.0
          viewport-height 2.0
-         viewport-width  (* viewport-height (/ image-width image-height))
+         viewport-width  (* viewport-height (double (/ image-width image-height)))
 
          pixel-count     (* image-width image-height)
          global-vecs     [:camera-center
@@ -113,10 +116,10 @@
 
          sphere-1        (let [circle-i (i> :sphere-1)]
                            (vec3i/create! realm circle-i 0.0 0.0 -1.0)
-                           (sphere circle-i 0.5))
+                           {:hittable (Sphere. circle-i 0.5)})
          sphere-2        (let [circle-i (i> :sphere-2)]
                            (vec3i/create! realm circle-i 0.0 -100.5 -1.0)
-                           (sphere circle-i 100.0))
+                           {:hittable (Sphere. circle-i 100.0)})
          hittables       [sphere-1 sphere-2]]
 
      (time
