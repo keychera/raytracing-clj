@@ -1,10 +1,11 @@
 (ns experimental.raytracing-rf
   (:require
-   [clj-async-profiler.core :as prof]
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [clojure.math :as math]
-   [experimental.vec3_realm])
-  (:import [experimental.vec3_realm Realm]))
+   [experimental.vec3_realmf]
+   [criterium.core :as criterium])
+  (:import [experimental.vec3_realmf Realm]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -18,11 +19,11 @@
     (.add target target origin)))
 
 (definterface Hittable
-  (^float hit [^experimental.vec3_realm.Realm realm i> ray-origin ray-direction ^float t-min ^float t-max]))
+  (^float hit [^experimental.vec3_realmf.Realm realm i> ray-origin ray-direction ^float t-min ^float t-max]))
 
 (deftype Sphere [center-i ^float radius]
   Hittable
-  (^float hit [_this ^experimental.vec3_realm.Realm realm i> ray-origin ray-direction ^float t-min ^float t-max]
+  (^float hit [_this ^experimental.vec3_realmf.Realm realm i> ray-origin ray-direction ^float t-min ^float t-max]
     (doto realm (.subtract (i> :temp) center-i ray-origin))
     (let [a (.lengthSquared realm ray-direction)
           h (.dot realm ray-direction (i> :temp))
@@ -81,8 +82,8 @@
     (into {} (map-indexed (fn [i v] [v (* 3 (+ offset (long i)))])) globals)))
 
 (defn -main []
-  (prof/profile
-   {:event :alloc}
+  (do #_#_prof/profile
+        {:event :alloc}
    (let [aspect-ratio    (fv 16/9)
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
@@ -127,7 +128,7 @@
                            {:hittable (Sphere. circle-i 100.0)})
          hittables       [sphere-1 sphere-2]]
 
-     (time
+     (criterium/bench
       (do (doto realm
             (.create (i> :camera-center) 0.0 0.0 0.0)
             (.create (i> :viewport-u) viewport-width 0.0 0.0)

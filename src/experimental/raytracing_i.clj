@@ -1,9 +1,10 @@
 (ns experimental.raytracing-i
   (:require
-   [clj-async-profiler.core :as prof]
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [clojure.math :as math]
-   [experimental.vec3i :as vec3i]))
+   [experimental.vec3i :as vec3i]
+   [criterium.core :as criterium]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -76,7 +77,7 @@
     (into {} (map-indexed (fn [i v] [v (* 3 (+ offset (long i)))])) globals)))
 
 (defn -main []
-  (prof/profile
+  (do #_#_prof/profile
    {:event :alloc}
    (let [aspect-ratio    (double 16/9)
          image-width     400
@@ -122,7 +123,7 @@
                            {:hittable (Sphere. circle-i 100.0)})
          hittables       [sphere-1 sphere-2]]
 
-     (time
+     (criterium/bench
       (do (doto realm
             (vec3i/create! (i> :camera-center) 0.0 0.0 0.0)
             (vec3i/create! (i> :viewport-u) viewport-width 0.0 0.0)
