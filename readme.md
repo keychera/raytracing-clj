@@ -55,3 +55,22 @@ Found 3 outliers in 60 samples (5.0000 %)
         low-severe       3 (5.0000 %)
  Variance from outliers : 14.1590 % Variance is moderately inflated by outliers
 ```
+
+raytracing-rd
+```
+Evaluation count : 60 in 60 samples of 1 calls.
+             Execution time mean : 3.421423 sec
+    Execution time std-deviation : 61.079395 ms
+   Execution time lower quantile : 3.357798 sec ( 2.5%)
+   Execution time upper quantile : 3.548718 sec (97.5%)
+                   Overhead used : 5.626911 ns
+
+Found 1 outliers in 60 samples (1.6667 %)
+        low-severe       1 (1.6667 %)
+ Variance from outliers : 7.7659 % Variance is slightly inflated by outliers
+```
+
+double and float practically have the same perf huh?
+maybe all these works and the answer is probably gpu, blas, vectorz or something
+but I want to see this through
+and multithread this
