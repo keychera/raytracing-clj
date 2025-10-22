@@ -5,26 +5,26 @@
 
 ;; to the typed land
 (definterface Vec3Ops
+  (create [^long target ^double u0 ^double u1 ^double u2])
   ;; member
   (^double x [^long i])
   (^double y [^long i])
   (^double z [^long i])
   ;; scalar
-  (^double lengthSquared [v])
-  (^double length [v])
-  (^double dot [u v])
+  (^double lengthSquared [^long v])
+  (^double length [^long v])
+  (^double dot [^long u ^long v])
   ;; vec3 ops, mutate target on realm
-  (create [^long target ^double u0 ^double u1 ^double u2])
-  (copy [target u])
-  (add [target u v])
-  (subtract [target u v])
-  (multVec3 [target u v])
-  (multScalar [target u ^double scalar])
-  (divideScalar [target u ^double scalar])
-  (cross [target u v])
-  (unitVec3 [target v])
+  (copy [^long target ^long u])
+  (add [^long target ^long u ^long v])
+  (subtract [^long target ^long u ^long v])
+  (multVec3 [^long target ^long u ^long v])
+  (multScalar [^long target ^long u ^double scalar])
+  (divideScalar [^long target ^long u ^double scalar])
+  (cross [^long target ^long u ^long v])
+  (unitVec3 [^long target ^long v])
   ;; take
-  (read [i]))
+  (read [^long i]))
 
 (defmacro operator [op this target u v]
   `(let [u0# (.x ~this ~u) u1# (.y ~this ~u) u2# (.z ~this ~u)
@@ -37,24 +37,24 @@
 
 (deftype Realm [^doubles realm]
   Vec3Ops
-  (create [_ ^long target ^double u0 ^double u1 ^double u2]
+  (create [_ target u0 u1 u2]
     (doto realm
       (aset target u0)
       (aset (+ 1 target) u1)
       (aset (+ 2 target) u2)))
 
-  (^double x [_ ^long i] (aget realm i))
-  (^double y [_ ^long i] (aget realm (+ 1 i)))
-  (^double z [_ ^long i] (aget realm (+ 2 i)))
+  (x [_ i] (aget realm i))
+  (y [_ i] (aget realm (+ 1 i)))
+  (z [_ i] (aget realm (+ 2 i)))
 
-  (^double lengthSquared [this v]
+  (lengthSquared [this v]
     (let [x (.x this v) y (.y this v) z (.z this v)]
       (+ (* x x) (* y y) (* z z))))
 
-  (^double length [this v]
+  (length [this v]
     (Math/sqrt (.lengthSquared this v)))
 
-  (^double dot [this u v]
+  (dot [this u v]
     (+ (* (.x this u) (.x this v))
        (* (.y this u) (.y this v))
        (* (.z this u) (.z this v))))
@@ -71,10 +71,10 @@
   (multVec3 [this target u v]
     (operator * this target u v))
 
-  (multScalar [this target v ^double scalar]
+  (multScalar [this target v scalar]
     (operator-scalar * this target v scalar))
 
-  (divideScalar [this target v ^double scalar]
+  (divideScalar [this target v scalar]
     (operator-scalar / this target v scalar))
 
   (cross [this target u v]

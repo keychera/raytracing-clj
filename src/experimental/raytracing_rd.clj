@@ -1,6 +1,6 @@
 (ns experimental.raytracing-rd
   (:require
-   #_[clj-async-profiler.core :as prof]
+   [clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [clojure.math :as math]
    [experimental.vec3_realm]
@@ -18,33 +18,39 @@
     (.add target target origin)))
 
 (definterface Hittable
-  (^double hit [^experimental.vec3_realm.Realm realm i> ray-origin ray-direction ^double t-min ^double t-max]))
+  (^double hit [^experimental.vec3_realm.Realm realm i> ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
 
-(deftype Sphere [center-i ^double radius]
+(deftype Sphere [^long center-i ^double radius]
   Hittable
-  (^double hit [_this ^experimental.vec3_realm.Realm realm i> ray-origin ray-direction ^double t-min ^double t-max]
-    (doto realm (.subtract (i> ::temp) center-i ray-origin))
-    (let [a (.lengthSquared realm ray-direction)
-          h (.dot realm ray-direction (i> ::temp))
-          c (- (.dot realm (i> ::temp) (i> ::temp)) (* radius radius))
-          discriminant (- (* h h) (* a c))]
-      (if (< discriminant 0.0)
-        -1.0
-        (let [sqrt-d (Math/sqrt discriminant)
-              root   (let [root' (/ (- h sqrt-d) a)]
-                       (if (or (<= root' t-min) (<= t-max root'))
-                         (/ (+ h sqrt-d) a)
-                         root'))]
-          (if (or (<= root t-min) (<= t-max root))
-            -1.0
-            (do (doto realm
-                  (ray-at (i> ::hit-point) ray-origin ray-direction root)
-                  (.subtract (i> ::temp) (i> ::hit-point) center-i)
-                  (.divideScalar (i> ::hit-normal) (i> ::temp) radius))
-                (let [front-face? (< (.dot realm ray-direction (i> ::hit-normal)) 0)]
-                  (when (not front-face?)
-                    (.multScalar realm (i> ::hit-normal) (i> ::hit-normal) -1)))
-                root)))))
+  (hit [_this realm i> ray-origin ray-direction t-min t-max]
+    (let [temp-i       (long (i> ::temp))
+          hit-point-i  (long (i> ::hit-point))
+          hit-normal-i (long (i> ::hit-normal))]
+      (.subtract realm temp-i center-i ray-origin)
+      (let [a (.lengthSquared realm ray-direction)
+            h (.dot realm ray-direction temp-i)
+            c (- (.dot realm temp-i temp-i) (* radius radius))
+            discriminant (- (* h h) (* a c))]
+        (if (< discriminant 0.0)
+          -1.0
+          (let [sqrt-d (Math/sqrt discriminant)
+                root   (let [root' (/ (- h sqrt-d) a)]
+                         (if (<= root' t-min)
+                           (/ (+ h sqrt-d) a)
+                           (if (<= t-max root')
+                             (/ (+ h sqrt-d) a)
+                             root')))]
+            (if (<= root t-min)
+              -1.0
+              (if (<= t-max root)
+                -1.0
+                (do (ray-at realm hit-point-i ray-origin ray-direction root)
+                    (.subtract realm temp-i hit-point-i center-i)
+                    (.divideScalar realm hit-normal-i temp-i radius)
+                    (let [dot-product (.dot realm ray-direction hit-normal-i)]
+                      (when (>= dot-product 0.0)
+                        (.multScalar realm hit-normal-i hit-normal-i -1.0)))
+                    root)))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
 (defn hit-anything! [realm i> ray-origin ray-direction hittables t-min t-max]
@@ -79,9 +85,49 @@
   (let [offset (long offset)]
     (into {} (map-indexed (fn [i v] [v (* 3 (+ offset (long i)))])) globals)))
 
+(comment
+  (require '[clj-java-decompiler.core :refer [decompile]])
+
+  (binding [*compiler-options* {:disable-locals-clearing false}]
+    (spit ".zzz/This.java"
+          (with-out-str
+            (decompile
+             (deftype Sphere [^long center-i ^double radius]
+               Hittable
+               (hit [_this realm i> ray-origin ray-direction t-min t-max]
+                 (let [temp-i       (long (i> ::temp))
+                       hit-point-i  (long (i> ::hit-point))
+                       hit-normal-i (long (i> ::hit-normal))]
+                   (.subtract realm temp-i center-i ray-origin)
+                   (let [a (.lengthSquared realm ray-direction)
+                         h (.dot realm ray-direction temp-i)
+                         c (- (.dot realm temp-i temp-i) (* radius radius))
+                         discriminant (- (* h h) (* a c))]
+                     (if (< discriminant 0.0)
+                       -1.0
+                       (let [sqrt-d (Math/sqrt discriminant)
+                             root   (let [root' (/ (- h sqrt-d) a)]
+                                      (if (<= root' t-min)
+                                        (/ (+ h sqrt-d) a)
+                                        (if (<= t-max root')
+                                          (/ (+ h sqrt-d) a)
+                                          root')))]
+                         (if (<= root t-min)
+                           -1.0
+                           (if (<= t-max root)
+                             -1.0
+                             (do (ray-at realm hit-point-i ray-origin ray-direction root)
+                                 (.subtract realm temp-i hit-point-i center-i)
+                                 (.divideScalar realm hit-normal-i temp-i radius)
+                                 (let [dot-product (.dot realm ray-direction hit-normal-i)]
+                                   (when (>= dot-product 0.0)
+                                     (.multScalar realm hit-normal-i hit-normal-i -1.0)))
+                                 root)))))))
+                 #_"this mutates ::hit-normal and ::hit-point")))))))
+
 (defn -main []
-  (do #_#_prof/profile
-        {:event :alloc}
+  (prof/profile
+   {:event :alloc}
    (let [aspect-ratio    (double 16/9)
          image-width     400
          image-height    (int (/ image-width aspect-ratio))
