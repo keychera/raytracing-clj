@@ -10,8 +10,9 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
-
 ;; hmm maybe this is a bad idea... but I want to do it....
+
+
 (defn create-i> [globals offset]
   (let [offset (long offset)]
     (into {} (map-indexed (fn [i v] [v (* 3 (+ offset (long i)))])) globals)))
@@ -33,11 +34,11 @@
                       ::viewport-v
                       ::pixel-du
                       ::pixel-dv
-                      ::upper-left
+                      ::U-L
                       ::pixel-00])
 (def spheres         [::sphere-1
                       ::sphere-2])
-(def loop-vecs       [::pixel-sample
+(def loop-vecs       [::sample
                       ::ray-origin
                       ::ray-direction
                       ::pixel-color])
@@ -51,9 +52,9 @@
   (let [im (create-i> all-vector-i pixel-count) v (im k)] v))
 
 ;; macro to avoid reflection
-(defmacro ray-at [realm target-i origin-i direction-i t]
-  `(do (.multScalar ^experimental.vec3_realm.Realm ~realm ~target-i ~direction-i ~t)
-       (.add ^experimental.vec3_realm.Realm ~realm ~target-i ~target-i ~origin-i)))
+(defmacro rayAt [realm target-i origin-i direction-i t]
+  `(do (.mult ^experimental.vec3_realm.Realm ~realm ~target-i ~direction-i ~t)
+       (.add  ^experimental.vec3_realm.Realm ~realm ~target-i ~target-i ~origin-i)))
 
 (definterface Hittable
   (^double hit [^experimental.vec3_realm.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
@@ -61,34 +62,31 @@
 (deftype Sphere [^long center-i ^double radius]
   Hittable
   (hit [_this realm ray-origin ray-direction t-min t-max]
-    (let [temp-i       (i> ::temp)
-          hit-point-i  (i> ::hit-point)
-          hit-normal-i (i> ::hit-normal)]
-      (.subtract realm temp-i center-i ray-origin)
-      (let [a (.lengthSquared realm ray-direction)
-            h (.dot realm ray-direction temp-i)
-            c (- (.dot realm temp-i temp-i) (* radius radius))
-            discriminant (- (* h h) (* a c))]
-        (if (< discriminant 0.0)
-          -1.0
-          (let [sqrt-d (Math/sqrt discriminant)
-                root   (let [root' (/ (- h sqrt-d) a)]
-                         (if (<= root' t-min)
+    (.subt realm (i> ::temp) center-i ray-origin)
+    (let [a (.lengthSquared realm ray-direction)
+          h (.dot realm ray-direction (i> ::temp))
+          c (- (.dot realm (i> ::temp) (i> ::temp)) (* radius radius))
+          discriminant (- (* h h) (* a c))]
+      (if (< discriminant 0.0)
+        -1.0
+        (let [sqrt-d (Math/sqrt discriminant)
+              root   (let [root' (/ (- h sqrt-d) a)]
+                       (if (<= root' t-min)
+                         (/ (+ h sqrt-d) a)
+                         (if (<= t-max root')
                            (/ (+ h sqrt-d) a)
-                           (if (<= t-max root')
-                             (/ (+ h sqrt-d) a)
-                             root')))]
-            (if (<= root t-min)
+                           root')))]
+          (if (<= root t-min)
+            -1.0
+            (if (<= t-max root)
               -1.0
-              (if (<= t-max root)
-                -1.0
-                (do (ray-at realm hit-point-i ray-origin ray-direction root)
-                    (.subtract realm temp-i hit-point-i center-i)
-                    (.divideScalar realm hit-normal-i temp-i radius)
-                    (let [dot-product (.dot realm ray-direction hit-normal-i)]
-                      (when (>= dot-product 0.0)
-                        (.multScalar realm hit-normal-i hit-normal-i -1.0)))
-                    root)))))))
+              (do (rayAt realm (i> ::hit-point)  ray-origin ray-direction root)
+                  (.subt realm (i> ::temp)       (i> ::hit-point) center-i)
+                  (.divi realm (i> ::hit-normal) (i> ::temp) radius)
+                  (let [dot-product (.dot realm ray-direction (i> ::hit-normal))]
+                    (when (>= dot-product 0.0)
+                      (.mult realm (i> ::hit-normal) (i> ::hit-normal) -1.0)))
+                  root))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
 (definterface Ray
@@ -111,9 +109,9 @@
     (rayColor [this realm hittables target ray-origin ray-direction]
       (let [t (.hitAnything this realm hittables ray-origin ray-direction 1e-3 ##Inf)]
         (if (> t 0.0)
-          (do (.create realm (i> ::temp) 1.0 1.0 1.0)
-              (.add realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
-              (.multScalar realm (i> ::temp) (i> ::temp) 0.5)
+          (do (.vec3 realm (i> ::temp) 1.0 1.0 1.0)
+              (.add  realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
+              (.mult realm (i> ::temp) (i> ::temp) 0.5)
               (.copy realm target (i> ::temp)))
           (do (.unitVec3 realm (i> ::temp) ray-direction)
               (let [y (.y realm (i> ::temp))
@@ -121,7 +119,7 @@
                     r (+ (* (- 1.0 a) 1.0) (* a 0.5))
                     g (+ (* (- 1.0 a) 1.0) (* a 0.7))
                     b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-                (.create realm target r g b))))))))
+                (.vec3 realm target r g b))))))))
 
 (comment
   (require '[clj-java-decompiler.core :refer [decompile]])
@@ -135,31 +133,31 @@
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
         ^Realm realm (Realm. (make-array Double/TYPE realm-size))
         sphere-1     (let [circle-i (i> ::sphere-1)]
-                       (.create realm circle-i 0.0 0.0 -1.0)
+                       (.vec3 realm circle-i 0.0 0.0 -1.0)
                        {:hittable (Sphere. circle-i 0.5)})
         sphere-2     (let [circle-i (i> ::sphere-2)]
-                       (.create realm circle-i 0.0 -100.5 -1.0)
+                       (.vec3 realm circle-i 0.0 -100.5 -1.0)
                        {:hittable (Sphere. circle-i 100.0)})
         hittables    [sphere-1 sphere-2]]
     (time #_criterium/bench
      (do (doto realm
-           (.create (i> ::camera-center) 0.0 0.0 0.0)
-           (.create (i> ::viewport-u) viewport-width 0.0 0.0)
-           (.create (i> ::viewport-v) 0.0 (- ^double viewport-height) 0.0)
-           (.divideScalar (i> ::pixel-du) (i> ::viewport-u) ^double image-width)
-           (.divideScalar (i> ::pixel-dv) (i> ::viewport-v) ^double image-height)
+           (.vec3 (i> ::camera-center) 0.0 0.0 0.0)
+           (.vec3 (i> ::viewport-u) viewport-width 0.0 0.0)
+           (.vec3 (i> ::viewport-v) 0.0 (- ^double viewport-height) 0.0)
+           (.divi (i> ::pixel-du) (i> ::viewport-u) ^double image-width)
+           (.divi (i> ::pixel-dv) (i> ::viewport-v) ^double image-height)
 
            ;; multiple operand is complex to represent currently 
-           (.create (i> ::temp) 0.0 0.0 focal-length)
-           (.subtract (i> ::upper-left) (i> ::camera-center) (i> ::temp))
-           (.divideScalar (i> ::temp) (i> ::viewport-u) 2.0)
-           (.subtract (i> ::upper-left) (i> ::upper-left) (i> ::temp))
-           (.divideScalar (i> ::temp) (i> ::viewport-v) 2.0)
-           (.subtract (i> ::upper-left) (i> ::upper-left) (i> ::temp))
+           (.vec3 (i> ::temp) 0.0 0.0 focal-length)
+           (.subt (i> ::U-L)  (i> ::camera-center) (i> ::temp))
+           (.divi (i> ::temp) (i> ::viewport-u) 2.0)
+           (.subt (i> ::U-L)  (i> ::U-L) (i> ::temp))
+           (.divi (i> ::temp) (i> ::viewport-v) 2.0)
+           (.subt (i> ::U-L)  (i> ::U-L) (i> ::temp))
 
-           (.add (i> ::temp) (i> ::pixel-du) (i> ::pixel-dv))
-           (.divideScalar (i> ::temp) (i> ::temp) 2.0)
-           (.add (i> ::pixel-00) (i> ::upper-left) (i> ::temp)))
+           (.add  (i> ::temp) (i> ::pixel-du) (i> ::pixel-dv))
+           (.divi (i> ::temp) (i> ::temp) 2.0)
+           (.add  (i> ::pixel-00) (i> ::U-L) (i> ::temp)))
 
          (prof/start)
 
@@ -168,21 +166,21 @@
            (loop [j 0.0 i 0.0]
              (when (< j image-height)
                (if (< i image-width)
-                 (do (.create realm (i> ::pixel-color) 0.0 0.0 0.0)
+                 (do (.vec3 realm (i> ::pixel-color) 0.0 0.0 0.0)
                      (dotimes [_ samples-per-px]
-                       (.copy realm (i> ::pixel-sample) (i> ::pixel-00))
-                       (.multScalar realm (i> ::temp) (i> ::pixel-du) (+ i (- (math/random) 0.5)))
-                       (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
-                       (.multScalar realm (i> ::temp) (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
-                       (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
+                       (.copy realm (i> ::sample) (i> ::pixel-00))
+                       (.mult realm (i> ::temp)   (i> ::pixel-du) (+ i (- (math/random) 0.5)))
+                       (.add  realm (i> ::sample) (i> ::sample)   (i> ::temp))
+                       (.mult realm (i> ::temp)   (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
+                       (.add  realm (i> ::sample) (i> ::sample)   (i> ::temp))
 
                        (.copy realm (i> ::ray-origin) (i> ::camera-center))
-                       (.subtract realm (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
+                       (.subt realm (i> ::ray-direction) (i> ::sample) (i> ::ray-origin))
 
                        ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
-                       (.rayColor ^Ray a-ray realm hittables (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction))
-                       (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample)))
-                     (.multScalar realm (long (* 3.0 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)
+                       (.rayColor ^Ray a-ray realm hittables (i> ::sample) (i> ::ray-origin) (i> ::ray-direction))
+                       (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::sample)))
+                     (.mult realm (long (* 3.0 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)
                      (recur j (+ i 1.0)))
                  (recur (+ j 1.0) 0.0)))))))
 
