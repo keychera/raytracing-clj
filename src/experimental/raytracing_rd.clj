@@ -54,20 +54,25 @@
                     root)))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
-(defn hit-anything! [realm i> ray-origin ray-direction hittables t-min t-max]
-  (let [length (count hittables)]
-    (loop [i 0 found? false closest-so-far t-max]
-      (if (< i length)
-        (let [^Hittable hittable (:hittable (nth hittables i))
-              t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
-          (if (> t 0.0)
-            (recur (inc i) true t)
-            (recur (inc i) found? closest-so-far)))
-        (if found? closest-so-far -1.0)))))
+(definterface HitAnything
+  (^double hitAnything [^experimental.vec3_realm.Realm realm i> hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
+
+(def hitter
+  (reify HitAnything
+    (hitAnything [_this realm i> hittables ray-origin ray-direction t-min t-max]
+      (let [length (count hittables)]
+        (loop [i 0 found? false closest-so-far t-max]
+          (if (< i length)
+            (let [^Hittable hittable (:hittable (nth hittables i))
+                  t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+              (if (> t 0.0)
+                (recur (inc i) true t)
+                (recur (inc i) found? closest-so-far)))
+            (if found? closest-so-far -1.0)))))))
 
 (defn ray-color! [realm i> target ray-origin ray-direction hittables]
   (let [^Realm realm realm
-        t     (double (hit-anything! realm i> ray-origin ray-direction hittables 1e-3 ##Inf))]
+        t     (.hitAnything ^HitAnything hitter realm i> hittables ray-origin ray-direction 1e-3 ##Inf)]
     (if (> t 0.0)
       (doto realm
         (.create (i> ::temp) 1.0 1.0 1.0)
@@ -93,38 +98,17 @@
     (spit ".zzz/This.java"
           (with-out-str
             (decompile
-             (deftype Sphere [^long center-i ^double radius]
-               Hittable
-               (hit [_this realm i> ray-origin ray-direction t-min t-max]
-                 (let [temp-i       (long (i> ::temp))
-                       hit-point-i  (long (i> ::hit-point))
-                       hit-normal-i (long (i> ::hit-normal))]
-                   (.subtract realm temp-i center-i ray-origin)
-                   (let [a (.lengthSquared realm ray-direction)
-                         h (.dot realm ray-direction temp-i)
-                         c (- (.dot realm temp-i temp-i) (* radius radius))
-                         discriminant (- (* h h) (* a c))]
-                     (if (< discriminant 0.0)
-                       -1.0
-                       (let [sqrt-d (Math/sqrt discriminant)
-                             root   (let [root' (/ (- h sqrt-d) a)]
-                                      (if (<= root' t-min)
-                                        (/ (+ h sqrt-d) a)
-                                        (if (<= t-max root')
-                                          (/ (+ h sqrt-d) a)
-                                          root')))]
-                         (if (<= root t-min)
-                           -1.0
-                           (if (<= t-max root)
-                             -1.0
-                             (do (ray-at realm hit-point-i ray-origin ray-direction root)
-                                 (.subtract realm temp-i hit-point-i center-i)
-                                 (.divideScalar realm hit-normal-i temp-i radius)
-                                 (let [dot-product (.dot realm ray-direction hit-normal-i)]
-                                   (when (>= dot-product 0.0)
-                                     (.multScalar realm hit-normal-i hit-normal-i -1.0)))
-                                 root)))))))
-                 #_"this mutates ::hit-normal and ::hit-point")))))))
+             (reify HitAnything
+               (hitAnything [_this realm i> hittables ray-origin ray-direction t-min t-max]
+                 (let [length (count hittables)]
+                   (loop [i 0 found? false closest-so-far t-max]
+                     (if (< i length)
+                       (let [^Hittable hittable (:hittable (nth hittables i))
+                             t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+                         (if (> t 0.0)
+                           (recur (inc i) true t)
+                           (recur (inc i) found? closest-so-far)))
+                       (if found? closest-so-far -1.0)))))))))))
 
 (defn -main []
   (prof/profile
