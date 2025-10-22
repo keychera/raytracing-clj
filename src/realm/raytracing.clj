@@ -143,6 +143,11 @@
           (with-out-str
             (decompile (println "hell0"))))))
 
+(defn clamp ^double [^double x ^double min-v ^double max-v] (min max-v (max x min-v)))
+
+(defn linear->gamma ^double [^double component]
+  (if (> component 0.0) (Math/sqrt component) 0.0))
+
 (defn -main []
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
         ^Realm realm (Realm. (make-array Double/TYPE realm-size))
@@ -207,6 +212,6 @@
         (dotimes [j image-height]
           (dotimes [i image-width]
             (let [[r g b] (->> (.read realm (long (* 3 (+ i (* j image-width)))))
-                               (map #(int (* 255.999 (double %)))))]
+                               (map #(int (* 256 (clamp (linear->gamma %) 0.0 0.999)))))]
               (.write out (str r " " g " " b "\n")))))))))
 
