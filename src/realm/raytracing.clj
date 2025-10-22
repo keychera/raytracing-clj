@@ -21,6 +21,8 @@
 (def image-width     400)
 (def image-height    (int (/ ^double image-width ^double aspect-ratio)))
 (def samples-per-px  100)
+(def max-depth       10)
+
 (def pixel-scale     (/ 1.0 (double samples-per-px)))
 
 (def focal-length    1.0)
@@ -45,6 +47,13 @@
 (def temporaries     [::temp
                       ::hit-point
                       ::hit-normal])
+
+;; this temp var stuff will be a hard thing to keep track of
+;; vague rule we use for now
+;; Hittable.hit mutate ::temp, ::hit-normal, and ::hit-point, return ^double t and will not modify argument vectors
+;; Ray.hitAnything does not mutate realm, return positive t if it hitAnything
+;; Ray.raycolor mutate argument target, ray-origin, ray-direction, and ::temp...
+;; do we only need one ::temp ? cannot be, let's see
 
 (def all-vector-i (concat global-vecs spheres loop-vecs temporaries))
 
@@ -92,7 +101,7 @@
 (definterface Ray
   (^double hitAnything
    [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
-  (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction]))
+  (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction ^long depth]))
 
 (def a-ray
   (reify Ray
@@ -106,20 +115,24 @@
                 (recur (inc i) true t)
                 (recur (inc i) found? closest-so-far)))
             (if found? closest-so-far -1.0)))))
-    (rayColor [this realm hittables target ray-origin ray-direction]
-      (let [t (.hitAnything this realm hittables ray-origin ray-direction 1e-3 ##Inf)]
-        (if (> t 0.0)
-          (do (.vec3 realm (i> ::temp) 1.0 1.0 1.0)
-              (.add  realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
-              (.mult realm (i> ::temp) (i> ::temp) 0.5)
-              (.copy realm target (i> ::temp)))
-          (do (.unitVec3 realm (i> ::temp) ray-direction)
-              (let [y (.y realm (i> ::temp))
-                    a (* 0.5 (+ y 1.0))
-                    r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-                    g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-                    b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-                (.vec3 realm target r g b))))))))
+
+    (rayColor [this realm hittables target ray-origin ray-direction depth]
+      (if (<= depth 0)
+        (.vec3 realm target 0.0 0.0 0.0)
+        (let [t (.hitAnything this realm hittables
+                              ray-origin ray-direction 1e-3 ##Inf)]
+          (if (> t 0.0)
+            (do (.randOnHemisphere realm ray-direction (i> ::hit-normal))
+                (.copy realm ray-origin (i> ::hit-point))
+                (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
+                (.mult realm target target 0.5))
+            (do (.unitVec3 realm (i> ::temp) ray-direction)
+                (let [y (.y realm (i> ::temp))
+                      a (* 0.5 (+ y 1.0))
+                      r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                      g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                      b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+                  (.vec3 realm target r g b)))))))))
 
 (comment
   (require '[clj-java-decompiler.core :refer [decompile]])
@@ -178,7 +191,7 @@
                        (.subt realm (i> ::ray-direction) (i> ::sample) (i> ::ray-origin))
 
                        ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
-                       (.rayColor ^Ray a-ray realm hittables (i> ::sample) (i> ::ray-origin) (i> ::ray-direction))
+                       (.rayColor ^Ray a-ray realm hittables (i> ::sample) (i> ::ray-origin) (i> ::ray-direction) max-depth)
                        (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::sample)))
                      (.mult realm (long (* 3.0 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)
                      (recur j (+ i 1.0)))
