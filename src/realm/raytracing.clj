@@ -122,7 +122,8 @@
         (let [t (.hitAnything this realm hittables
                               ray-origin ray-direction 1e-3 ##Inf)]
           (if (> t 0.0)
-            (do (.randOnHemisphere realm ray-direction (i> ::hit-normal))
+            (do (.randUnitVec3 realm ray-direction)
+                (.add  realm ray-direction ray-direction (i> ::hit-normal))
                 (.copy realm ray-origin (i> ::hit-point))
                 (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
                 (.mult realm target target 0.5))
