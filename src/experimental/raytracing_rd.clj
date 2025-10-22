@@ -55,7 +55,8 @@
     #_"this mutates ::hit-normal and ::hit-point"))
 
 (definterface Ray
-  (^double hitAnything [^experimental.vec3_realm.Realm realm i> hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
+  (^double hitAnything
+   [^experimental.vec3_realm.Realm realm i> hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
   (rayColor [^experimental.vec3_realm.Realm realm i> hittables ^long target ^long ray-origin ^long ray-direction]))
 
 (def a-ray
@@ -95,49 +96,22 @@
   (binding [*compiler-options* {:disable-locals-clearing false}]
     (spit ".zzz/This.java"
           (with-out-str
-            (decompile
-             (reify Ray
-               (hitAnything [_this realm i> hittables ray-origin ray-direction t-min t-max]
-                 (let [length (count hittables)]
-                   (loop [i 0 found? false closest-so-far t-max]
-                     (if (< i length)
-                       (let [^Hittable hittable (:hittable (nth hittables i))
-                             t        (.hit hittable realm i> ray-origin ray-direction t-min closest-so-far)]
-                         (if (> t 0.0)
-                           (recur (inc i) true t)
-                           (recur (inc i) found? closest-so-far)))
-                       (if found? closest-so-far -1.0)))))
-               
-               (rayColor [this realm i> hittables target ray-origin ray-direction]
-                 (let [t (.hitAnything this realm i> hittables ray-origin ray-direction 1e-3 ##Inf)]
-                   (if (> t 0.0)
-                     (do (.create realm (i> ::temp) 1.0 1.0 1.0)
-                         (.add realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
-                         (.multScalar realm (i> ::temp) (i> ::temp) 0.5)
-                         (.copy realm target (i> ::temp)))
-                     (do (.unitVec3 realm (i> ::temp) ray-direction)
-                         (let [y (.y realm (i> ::temp))
-                               a (* 0.5 (+ y 1.0))
-                               r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-                               g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-                               b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-                           (.create realm target r g b))))))))))))
-
+            (decompile (println "hell0"))))))
 
 (defn -main []
-  (prof/profile
-   {:event :alloc}
+  (do #_#_prof/profile
+        {:event :alloc}
    (let [aspect-ratio    (double 16/9)
          image-width     400
-         image-height    (int (/ image-width aspect-ratio))
+         image-height    (long (/ image-width aspect-ratio))
          samples-per-px  100
-         pixel-scale     (/ 1 samples-per-px)
+         pixel-scale     (/ 1.0 samples-per-px)
 
          focal-length    1.0
          viewport-height 2.0
          viewport-width  (* viewport-height (double (/ image-width image-height)))
 
-         pixel-count     (* image-width image-height)
+         pixel-count     (int (* image-width image-height))
          global-vecs     [::camera-center
                           ::viewport-u
                           ::viewport-v
@@ -170,7 +144,6 @@
                            (.create realm circle-i 0.0 -100.5 -1.0)
                            {:hittable (Sphere. circle-i 100.0)})
          hittables       [sphere-1 sphere-2]]
-
      (time #_criterium/bench
       (do (doto realm
             (.create (i> ::camera-center) 0.0 0.0 0.0)
@@ -191,23 +164,32 @@
             (.divideScalar (i> ::temp) (i> ::temp) 2.0)
             (.add (i> ::pixel-00) (i> ::upper-left) (i> ::temp)))
 
-          (dotimes [j image-height]
-            (dotimes [i image-width]
-              (.create realm (i> ::pixel-color) 0.0 0.0 0.0)
-              (dotimes [_ samples-per-px]
-                (.copy realm (i> ::pixel-sample) (i> ::pixel-00))
-                (.multScalar realm (i> ::temp) (i> ::pixel-du) (+ i (- (math/random) 0.5)))
-                (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
-                (.multScalar realm (i> ::temp) (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
-                (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
+          (prof/start)
 
-                (.copy realm (i> ::ray-origin) (i> ::camera-center))
-                (.subtract realm (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
+          (let [image-height (double image-height)
+                image-width (double image-width)]
+            (loop [j 0.0 i 0.0]
+              (when (< j image-height)
+                (if (< i image-width)
+                  (do (.create realm (i> ::pixel-color) 0.0 0.0 0.0)
+                      (dotimes [_ samples-per-px]
+                        (.copy realm (i> ::pixel-sample) (i> ::pixel-00))
+                        (.multScalar realm (i> ::temp) (i> ::pixel-du) (+ i (- (math/random) 0.5)))
+                        (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
+                        (.multScalar realm (i> ::temp) (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
+                        (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
 
-                ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
-                (.rayColor ^Ray a-ray realm i> hittables (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction))
-                (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample)))
-              (.multScalar realm (long (* 3 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)))))
+                        (.copy realm (i> ::ray-origin) (i> ::camera-center))
+                        (.subtract realm (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
+
+                        ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
+                        (.rayColor ^Ray a-ray realm i> hittables (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction))
+                        (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample)))
+                      (.multScalar realm (long (* 3.0 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)
+                      (recur j (+ i 1.0)))
+                  (recur (+ j 1.0) 0.0)))))))
+
+     (prof/stop)
 
      (with-open [out (io/writer "scene-i.ppm")]
        (.write out (str "P3\n" image-width " " image-height "\n255\n"))
