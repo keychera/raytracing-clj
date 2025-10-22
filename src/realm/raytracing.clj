@@ -1,6 +1,6 @@
 (ns realm.raytracing
   (:require
-   #_[clj-async-profiler.core :as prof]
+   [clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [clojure.math :as math]
    #_[criterium.core :as criterium]
@@ -31,22 +31,24 @@
 (def pixel-count     (int (* ^double image-width ^double image-height)))
 
 ;; header, is this c?
-(def global-vecs     [::camera-center
-                      ::viewport-u
-                      ::viewport-v
-                      ::pixel-du
-                      ::pixel-dv
-                      ::U-L
-                      ::pixel-00])
-(def spheres         [::sphere-1
-                      ::sphere-2])
-(def loop-vecs       [::sample
-                      ::ray-origin
-                      ::ray-direction
-                      ::pixel-color])
-(def temporaries     [::temp
-                      ::hit-point
-                      ::hit-normal])
+(def global-vecs [::camera-center
+                  ::viewport-u
+                  ::viewport-v
+                  ::pixel-du
+                  ::pixel-dv
+                  ::U-L
+                  ::pixel-00])
+(def world       [::sphere-1
+                  ::sphere-2
+                  ::ground-color])
+(def loop-vecs   [::sample
+                  ::ray-origin
+                  ::ray-direction
+                  ::pixel-color])
+(def temporaries [::temp
+                  ::hit-point
+                  ::hit-normal
+                  ::attenuation])
 
 ;; this temp var stuff will be a hard thing to keep track of
 ;; vague rule we use for now
@@ -55,7 +57,7 @@
 ;; Ray.raycolor mutate argument target, ray-origin, ray-direction, and ::temp...
 ;; do we only need one ::temp ? cannot be, let's see
 
-(def all-vector-i (concat global-vecs spheres loop-vecs temporaries))
+(def all-vector-i (concat global-vecs world loop-vecs temporaries))
 
 (defmacro i> [k]
   (let [im (create-i> all-vector-i pixel-count) v (im k)] v))
@@ -93,13 +95,30 @@
                   (.subt realm (i> ::temp)       (i> ::hit-point) center-i)
                   (.divi realm (i> ::hit-normal) (i> ::temp) radius)
                   (let [dot-product (.dot realm ray-direction (i> ::hit-normal))]
-                    (when (>= dot-product 0.0)
+                    (when (>= dot-product 0.0) ;; not front-face, written like this to avoid reflection
                       (.mult realm (i> ::hit-normal) (i> ::hit-normal) -1.0)))
                   root))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
+(definterface Material
+  ;; no scattered ray argument because we reuse ::ray-origin and ::ray-direction
+  (^boolean scatter [^realm.vec3.Realm realm ^long ray-origin ^long ray-direction ^long hit-point ^long hit-normal ^long attenuation]))
+
+(deftype Lambertian [^long albedo]
+  Material
+  (scatter [_this realm ray-origin ray-direction hit-point hit-normal attenuation]
+    (.randUnitVec3 realm ray-direction)
+    (.add  realm ray-direction ray-direction hit-normal)
+    (.copy realm ray-origin hit-point)
+    (.copy realm attenuation albedo)
+    true))
+
+(deftype HitRecord
+         [^double t
+          ^clojure.lang.IPersistentMap gotHit])
+
 (definterface Ray
-  (^double hitAnything
+  (^realm.raytracing.HitRecord hitAnything
    [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
   (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction ^long depth]))
 
@@ -107,26 +126,31 @@
   (reify Ray
     (hitAnything [_this realm hittables ray-origin ray-direction t-min t-max]
       (let [length (count hittables)]
-        (loop [i 0 found? false closest-so-far t-max]
+        (loop [i 0 closest-so-far t-max last-hit nil]
           (if (< i length)
-            (let [^Hittable hittable (:hittable (nth hittables i))
+            (let [got-hit   (nth hittables i)
+                  ^Hittable hittable (::hittable got-hit)
                   t        (.hit hittable realm ray-origin ray-direction t-min closest-so-far)]
               (if (> t 0.0)
-                (recur (inc i) true t)
-                (recur (inc i) found? closest-so-far)))
-            (if found? closest-so-far -1.0)))))
+                (recur (inc i) t got-hit)
+                (recur (inc i) closest-so-far last-hit)))
+            (if (some? last-hit)
+              (HitRecord. closest-so-far last-hit)
+              (HitRecord. -1.0 nil))))))
 
     (rayColor [this realm hittables target ray-origin ray-direction depth]
       (if (<= depth 0)
         (.vec3 realm target 0.0 0.0 0.0)
-        (let [t (.hitAnything this realm hittables
-                              ray-origin ray-direction 1e-3 ##Inf)]
-          (if (> t 0.0)
-            (do (.randUnitVec3 realm ray-direction)
-                (.add  realm ray-direction ray-direction (i> ::hit-normal))
-                (.copy realm ray-origin (i> ::hit-point))
-                (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
-                (.mult realm target target 0.5))
+        (let [hit-record (.hitAnything this realm hittables
+                                       ray-origin ray-direction 1e-3 ##Inf)]
+          (if (> (.t hit-record) 0.0)
+            (let [got-hit       (.gotHit hit-record)
+                  ^Material mat (::material got-hit)
+                  scattered?    (when mat (.scatter mat realm ray-origin ray-direction (i> ::hit-point) (i> ::hit-normal) (i> ::attenuation)))]
+              (if scattered?
+                (do (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
+                    (.multVec3 realm target target (i> ::attenuation)))
+                (.vec3 realm target 0.0 0.0 0.0)))
             (do (.unitVec3 realm (i> ::temp) ray-direction)
                 (let [y (.y realm (i> ::temp))
                       a (* 0.5 (+ y 1.0))
@@ -153,11 +177,17 @@
         ^Realm realm (Realm. (make-array Double/TYPE realm-size))
         sphere-1     (let [circle-i (i> ::sphere-1)]
                        (.vec3 realm circle-i 0.0 0.0 -1.0)
-                       {:hittable (Sphere. circle-i 0.5)})
-        sphere-2     (let [circle-i (i> ::sphere-2)]
+                       {::hittable (Sphere. circle-i 0.5)})
+        sphere-2     (let [circle-i (i> ::sphere-2)
+                           albedo-i (i> ::ground-color)]
                        (.vec3 realm circle-i 0.0 -100.5 -1.0)
-                       {:hittable (Sphere. circle-i 100.0)})
+                       (.vec3 realm albedo-i 0.8 0.8 0.0)
+                       {::hittable (Sphere. circle-i 100.0)
+                        ::material (Lambertian. albedo-i)})
         hittables    [sphere-1 sphere-2]]
+
+    ;; (prof/start)
+
     (time #_criterium/bench
      (do (doto realm
            (.vec3 (i> ::camera-center) 0.0 0.0 0.0)
@@ -178,7 +208,6 @@
            (.divi (i> ::temp) (i> ::temp) 2.0)
            (.add  (i> ::pixel-00) (i> ::U-L) (i> ::temp)))
 
-         ;;  (prof/start)
 
          (let [image-height (double image-height)
                image-width (double image-width)]
