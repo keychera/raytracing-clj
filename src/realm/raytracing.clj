@@ -21,7 +21,7 @@
 (def image-width     400)
 (def image-height    (int (/ ^double image-width ^double aspect-ratio)))
 (def samples-per-px  100)
-(def max-depth       10)
+(def max-depth       50)
 
 (def pixel-scale     (/ 1.0 (double samples-per-px)))
 
@@ -40,7 +40,8 @@
                   ::pixel-00])
 (def world       [::sphere-1
                   ::sphere-2
-                  ::ground-color])
+                  ::ground-color
+                  ::center-color])
 (def loop-vecs   [::sample
                   ::ray-origin
                   ::ray-direction
@@ -146,7 +147,9 @@
           (if (> (.t hit-record) 0.0)
             (let [got-hit       (.gotHit hit-record)
                   ^Material mat (::material got-hit)
-                  scattered?    (when mat (.scatter mat realm ray-origin ray-direction (i> ::hit-point) (i> ::hit-normal) (i> ::attenuation)))]
+                  scattered?    (when mat
+                                  (.scatter mat realm ray-origin ray-direction
+                                            (i> ::hit-point) (i> ::hit-normal) (i> ::attenuation)))]
               (if scattered?
                 (do (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
                     (.multVec3 realm target target (i> ::attenuation)))
@@ -175,16 +178,19 @@
 (defn -main []
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
         ^Realm realm (Realm. (make-array Double/TYPE realm-size))
-        sphere-1     (let [circle-i (i> ::sphere-1)]
+        center       (let [circle-i (i> ::sphere-1)
+                           albedo-i (i> ::center-color)]
                        (.vec3 realm circle-i 0.0 0.0 -1.0)
-                       {::hittable (Sphere. circle-i 0.5)})
-        sphere-2     (let [circle-i (i> ::sphere-2)
+                       (.vec3 realm albedo-i 0.1 0.2 0.5)
+                       {::hittable (Sphere. circle-i 0.5)
+                        ::material (Lambertian. albedo-i)})
+        ground       (let [circle-i (i> ::sphere-2)
                            albedo-i (i> ::ground-color)]
                        (.vec3 realm circle-i 0.0 -100.5 -1.0)
-                       (.vec3 realm albedo-i 0.8 0.8 0.0)
+                       (.vec3 realm albedo-i 0.5 0.5 0.5)
                        {::hittable (Sphere. circle-i 100.0)
                         ::material (Lambertian. albedo-i)})
-        hittables    [sphere-1 sphere-2]]
+        hittables    [center ground]]
 
     ;; (prof/start)
 
@@ -241,6 +247,6 @@
         (dotimes [j image-height]
           (dotimes [i image-width]
             (let [[r g b] (->> (.read realm (long (* 3 (+ i (* j image-width)))))
-                               (map #(int (* 256 (clamp (linear->gamma %) 0.0 0.999)))))]
+                               (map #(int (* 256.0 (clamp (linear->gamma %) 0.0 0.999)))))]
               (.write out (str r " " g " " b "\n")))))))))
 
