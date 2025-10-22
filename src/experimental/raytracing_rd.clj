@@ -12,10 +12,11 @@
 
 
 ;; hmm maybe this is a bad idea... but I want to do it....
-(defn ray-at [realm target origin direction t]
-  (doto ^Realm realm
-    (.multScalar target direction t)
-    (.add target target origin)))
+
+;; macro to avoid reflection
+(defmacro ray-at [realm target-i origin-i direction-i t]
+  `(do (.multScalar ^experimental.vec3_realm.Realm ~realm ~target-i ~direction-i ~t)
+       (.add ^experimental.vec3_realm.Realm ~realm ~target-i ~target-i ~origin-i)))
 
 (definterface Hittable
   (^double hit [^experimental.vec3_realm.Realm realm i> ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
