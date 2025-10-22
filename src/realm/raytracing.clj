@@ -1,11 +1,11 @@
-(ns experimental.raytracing-rd
+(ns realm.raytracing
   (:require
-   [clj-async-profiler.core :as prof]
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    [clojure.math :as math]
-   [experimental.vec3_realm]
-   #_[criterium.core :as criterium])
-  (:import [experimental.vec3_realm Realm]))
+   #_[criterium.core :as criterium]
+   [realm.vec3])
+  (:import [realm.vec3 Realm]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -53,11 +53,11 @@
 
 ;; macro to avoid reflection
 (defmacro rayAt [realm target-i origin-i direction-i t]
-  `(do (.mult ^experimental.vec3_realm.Realm ~realm ~target-i ~direction-i ~t)
-       (.add  ^experimental.vec3_realm.Realm ~realm ~target-i ~target-i ~origin-i)))
+  `(do (.mult ^realm.vec3.Realm ~realm ~target-i ~direction-i ~t)
+       (.add  ^realm.vec3.Realm ~realm ~target-i ~target-i ~origin-i)))
 
 (definterface Hittable
-  (^double hit [^experimental.vec3_realm.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
+  (^double hit [^realm.vec3.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
 
 (deftype Sphere [^long center-i ^double radius]
   Hittable
@@ -91,8 +91,8 @@
 
 (definterface Ray
   (^double hitAnything
-   [^experimental.vec3_realm.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
-  (rayColor [^experimental.vec3_realm.Realm realm hittables ^long target ^long ray-origin ^long ray-direction]))
+   [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
+  (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction]))
 
 (def a-ray
   (reify Ray
@@ -159,7 +159,7 @@
            (.divi (i> ::temp) (i> ::temp) 2.0)
            (.add  (i> ::pixel-00) (i> ::U-L) (i> ::temp)))
 
-         (prof/start)
+         ;;  (prof/start)
 
          (let [image-height (double image-height)
                image-width (double image-width)]
@@ -184,11 +184,11 @@
                      (recur j (+ i 1.0)))
                  (recur (+ j 1.0) 0.0)))))))
 
-    (prof/stop)
+    ;; (prof/stop)
 
     (let [image-height (int image-height)
           image-width (int image-width)]
-      (with-open [out (io/writer "scene-i.ppm")]
+      (with-open [out (io/writer "scene-realm.ppm")]
         (.write out (str "P3\n" image-width " " image-height "\n255\n"))
         (dotimes [j image-height]
           (dotimes [i image-width]

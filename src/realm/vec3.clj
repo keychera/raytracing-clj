@@ -1,4 +1,4 @@
-(ns experimental.vec3-realm)
+(ns realm.vec3)
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
