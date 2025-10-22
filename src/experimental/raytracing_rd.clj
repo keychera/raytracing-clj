@@ -54,38 +54,36 @@
                     root)))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
-(definterface HitAnything
-  (^double hitAnything [^experimental.vec3_realm.Realm realm i> hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
+(definterface Ray
+  (^double hitAnything [^experimental.vec3_realm.Realm realm i> hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
+  (rayColor [^experimental.vec3_realm.Realm realm i> hittables ^long target ^long ray-origin ^long ray-direction]))
 
-(def hitter
-  (reify HitAnything
+(def a-ray
+  (reify Ray
     (hitAnything [_this realm i> hittables ray-origin ray-direction t-min t-max]
       (let [length (count hittables)]
         (loop [i 0 found? false closest-so-far t-max]
           (if (< i length)
             (let [^Hittable hittable (:hittable (nth hittables i))
-                  t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+                  t        (.hit hittable realm i> ray-origin ray-direction t-min closest-so-far)]
               (if (> t 0.0)
                 (recur (inc i) true t)
                 (recur (inc i) found? closest-so-far)))
-            (if found? closest-so-far -1.0)))))))
-
-(defn ray-color! [realm i> target ray-origin ray-direction hittables]
-  (let [^Realm realm realm
-        t     (.hitAnything ^HitAnything hitter realm i> hittables ray-origin ray-direction 1e-3 ##Inf)]
-    (if (> t 0.0)
-      (doto realm
-        (.create (i> ::temp) 1.0 1.0 1.0)
-        (.add (i> ::temp) (i> ::hit-normal) (i> ::temp))
-        (.multScalar (i> ::temp) (i> ::temp) 0.5)
-        (.copy target (i> ::temp)))
-      (do (.unitVec3 realm (i> ::temp) ray-direction)
-          (let [y (.y realm (i> ::temp))
-                a (* 0.5 (+ y 1.0))
-                r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-                g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-                b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-            (.create realm target r g b))))))
+            (if found? closest-so-far -1.0)))))
+    (rayColor [this realm i> hittables target ray-origin ray-direction]
+      (let [t (.hitAnything this realm i> hittables ray-origin ray-direction 1e-3 ##Inf)]
+        (if (> t 0.0)
+          (do (.create realm (i> ::temp) 1.0 1.0 1.0)
+              (.add realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
+              (.multScalar realm (i> ::temp) (i> ::temp) 0.5)
+              (.copy realm target (i> ::temp)))
+          (do (.unitVec3 realm (i> ::temp) ray-direction)
+              (let [y (.y realm (i> ::temp))
+                    a (* 0.5 (+ y 1.0))
+                    r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                    g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                    b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+                (.create realm target r g b))))))))
 
 (defn create-i> [globals offset]
   (let [offset (long offset)]
@@ -98,17 +96,33 @@
     (spit ".zzz/This.java"
           (with-out-str
             (decompile
-             (reify HitAnything
+             (reify Ray
                (hitAnything [_this realm i> hittables ray-origin ray-direction t-min t-max]
                  (let [length (count hittables)]
                    (loop [i 0 found? false closest-so-far t-max]
                      (if (< i length)
                        (let [^Hittable hittable (:hittable (nth hittables i))
-                             t        (.hit hittable realm i> ray-origin ray-direction t-min (or closest-so-far t-max))]
+                             t        (.hit hittable realm i> ray-origin ray-direction t-min closest-so-far)]
                          (if (> t 0.0)
                            (recur (inc i) true t)
                            (recur (inc i) found? closest-so-far)))
-                       (if found? closest-so-far -1.0)))))))))))
+                       (if found? closest-so-far -1.0)))))
+               
+               (rayColor [this realm i> hittables target ray-origin ray-direction]
+                 (let [t (.hitAnything this realm i> hittables ray-origin ray-direction 1e-3 ##Inf)]
+                   (if (> t 0.0)
+                     (do (.create realm (i> ::temp) 1.0 1.0 1.0)
+                         (.add realm (i> ::temp) (i> ::hit-normal) (i> ::temp))
+                         (.multScalar realm (i> ::temp) (i> ::temp) 0.5)
+                         (.copy realm target (i> ::temp)))
+                     (do (.unitVec3 realm (i> ::temp) ray-direction)
+                         (let [y (.y realm (i> ::temp))
+                               a (* 0.5 (+ y 1.0))
+                               r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                               g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                               b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+                           (.create realm target r g b))))))))))))
+
 
 (defn -main []
   (prof/profile
@@ -181,19 +195,18 @@
             (dotimes [i image-width]
               (.create realm (i> ::pixel-color) 0.0 0.0 0.0)
               (dotimes [_ samples-per-px]
-                (doto realm
-                  (.copy (i> ::pixel-sample) (i> ::pixel-00))
-                  (.multScalar (i> ::temp) (i> ::pixel-du) (+ i (- (math/random) 0.5)))
-                  (.add (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
-                  (.multScalar (i> ::temp) (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
-                  (.add (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
+                (.copy realm (i> ::pixel-sample) (i> ::pixel-00))
+                (.multScalar realm (i> ::temp) (i> ::pixel-du) (+ i (- (math/random) 0.5)))
+                (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
+                (.multScalar realm (i> ::temp) (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
+                (.add realm (i> ::pixel-sample) (i> ::pixel-sample) (i> ::temp))
 
-                  (.copy (i> ::ray-origin) (i> ::camera-center))
-                  (.subtract (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
+                (.copy realm (i> ::ray-origin) (i> ::camera-center))
+                (.subtract realm (i> ::ray-direction) (i> ::pixel-sample) (i> ::ray-origin))
 
-                  ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
-                  (ray-color! i> (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction) hittables)
-                  (.add (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample))))
+                ;; pixel-sample is used as temp, this is some bug-prone way of programming huh
+                (.rayColor ^Ray a-ray realm i> hittables (i> ::pixel-sample) (i> ::ray-origin) (i> ::ray-direction))
+                (.add realm (i> ::pixel-color) (i> ::pixel-color) (i> ::pixel-sample)))
               (.multScalar realm (long (* 3 (+ i (* j image-width)))) (i> ::pixel-color) pixel-scale)))))
 
      (with-open [out (io/writer "scene-i.ppm")]
