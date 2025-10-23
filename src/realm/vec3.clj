@@ -32,6 +32,7 @@
   (randOnHemisphere [^long target ^long normal])
   ;; light
   (reflect [^long target ^long v ^long normal])
+  (refract [^long target ^long uv ^long n ^double etaiOverEtat])
   ;; take
   (read [^long i]))
 
@@ -136,6 +137,20 @@
       (.subt this temp temp v)      ;; temp-i = (n * 2*dot(v,n)) - v
       (.mult this target temp -1.0))  ;; target = temp-i * -1
     )
+
+  (refract [this target uv n etaiOverEtat]
+    (.mult this temp uv -1.0)
+    (let [cos-theta (Math/min (.dot this temp n) 1.0)]
+      (.mult this temp n cos-theta)  ;; r-perp = n * cos-theta
+      (.add  this temp temp uv)      ;; r-perp = (n * cos-theta) + uv
+      (.mult this target temp etaiOverEtat)  ;; target = r-perp * etaiOverEtat  
+      )
+    (let [lensq (.lengthSquared this target)
+          nn    (- (Math/sqrt (Math/abs (- 1.0 lensq))))]
+      (.mult this temp n nn)         ;; r-para = n * -sqrt(abs(1.0 - lensq))
+      (.add this target target temp) ;; r-perp + r-para
+      ))
+
 
   (read [this i] [(.x this i) (.y this i) (.z this i)]))
 
