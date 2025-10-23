@@ -47,7 +47,7 @@
 (defn rand-double ^double [^double vmin ^double vmax]
   (+ vmin (* (- vmax vmin) (math/random))))
 
-(deftype Realm [^doubles realm ^long temp-i]
+(deftype Realm [^doubles realm ^long temp]
   Vec3Ops
   (vec3 [_ target u0 u1 u2]
     (doto realm
@@ -128,15 +128,15 @@
       (.mult this target target -1.0)))
 
   (reflect [this target v n]
-     ;; bug prone stuff again
-     ;; since all the args are mutable, if they are the same array
-     ;; all hell break loose
+    ;; bug prone stuff again
+    ;; since all the args are mutable, if they are the same array
+    ;; all hell break loose
     (let [dot-product (* 2.0 (.dot this v n))]
-      (.mult this temp-i n dot-product) ;; temp-i = n * 2*dot(v,n)
-      (.subt this temp-i temp-i v)      ;; temp-i = (n * 2*dot(v,n)) - v
-      (.mult this target temp-i -1.0))  ;; target = temp-i * -1
+      (.mult this temp n dot-product) ;; temp-i = n * 2*dot(v,n)
+      (.subt this temp temp v)      ;; temp-i = (n * 2*dot(v,n)) - v
+      (.mult this target temp -1.0))  ;; target = temp-i * -1
     )
-  
+
   (read [this i] [(.x this i) (.y this i) (.z this i)]))
 
 

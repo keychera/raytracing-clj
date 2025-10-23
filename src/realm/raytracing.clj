@@ -65,7 +65,7 @@
 (def all-vector-i (concat global-vecs world loop-vecs temporaries))
 
 (defmacro i> [k]
-  (let [im (create-i> all-vector-i pixel-count) v (im k)] 
+  (let [im (create-i> all-vector-i pixel-count) v (im k)]
     (or v (throw (ex-info (str "key " k " is not created yet") {:key k})))))
 
 ;; macro to avoid reflection
@@ -119,13 +119,19 @@
     (.copy realm attenuation albedo)
     true))
 
-(deftype Metal [^long albedo]
+(deftype Metal [^long albedo ^double fuzz]
   Material
   (scatter [_this realm ray-origin ray-direction hit-point hit-normal attenuation]
-    (.reflect realm ray-direction ray-direction hit-normal)
-    (.copy realm ray-origin hit-point)
-    (.copy realm attenuation albedo)
-    true))
+    (let [temp-i (.temp realm)]
+      (.reflect realm ray-direction ray-direction hit-normal)
+      (.unitVec3 realm ray-direction ray-direction)
+      (.randUnitVec3 realm temp-i)
+      (.mult realm temp-i temp-i fuzz)
+      (.add  realm ray-direction ray-direction temp-i)
+      (.copy realm ray-origin hit-point)
+      (.copy realm attenuation albedo))
+    (let [dot-product (.dot realm ray-direction hit-normal)]
+      (> dot-product 0.0))))
 
 (deftype HitRecord
          [^double t
@@ -183,7 +189,7 @@
                     (.vec3 realm (i> ::temp) r g b)
                     (.multVec3 realm target target (i> ::temp)))))))))))
 (comment
-  (require '[clj-java-decompiler.core :refer [decompile]]) 
+  (require '[clj-java-decompiler.core :refer [decompile]])
 
   (binding [*compiler-options* {:disable-locals-clearing false}]
     (spit ".zzz/This.java"
@@ -215,13 +221,13 @@
                        (.vec3 realm circle-i -1.0 0.0 -1.0)
                        (.vec3 realm albedo-i 0.8 0.8 0.8)
                        {::hittable (Sphere. circle-i 0.5)
-                        ::material (Metal. albedo-i)})
+                        ::material (Metal. albedo-i 0.3)})
         right        (let [circle-i (i> ::sphere-4)
                            albedo-i (i> ::right-color)]
                        (.vec3 realm circle-i 1.0 0.0 -1.0)
                        (.vec3 realm albedo-i 0.8 0.6 0.2)
                        {::hittable (Sphere. circle-i 0.5)
-                        ::material (Metal. albedo-i)})
+                        ::material (Metal. albedo-i 1.0)})
         hittables    [center ground left right]]
 
     ;; (prof/start)
