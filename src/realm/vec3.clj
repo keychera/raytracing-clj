@@ -1,6 +1,6 @@
-(ns realm.vec3
+(ns realm.vec3 
   (:require
-   [clojure.math :as math]))
+   [realm.rng :refer [rand-double]]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -44,9 +44,6 @@
 (defmacro operator-scalar [op this target v scalar]
   `(let [x# (.x ~this ~v) y# (.y ~this ~v) z# (.z ~this ~v)]
      (.vec3 ~this ~target (~op x# ~scalar) (~op y# ~scalar) (~op z# ~scalar))))
-
-(defn rand-double ^double [^double vmin ^double vmax]
-  (+ vmin (* (- vmax vmin) (math/random))))
 
 (deftype Realm [^doubles realm ^long temp]
   Vec3Ops
@@ -108,7 +105,7 @@
     (.divi this target v (.length this v)))
 
   (rand [this target]
-    (.vec3 this target (math/random) (math/random) (math/random)))
+    (.vec3 this target (rand-double) (rand-double) (rand-double)))
 
   (rand [this target vmin vmax]
     (.vec3 this target (rand-double vmin vmax) (rand-double vmin vmax) (rand-double vmin vmax)))

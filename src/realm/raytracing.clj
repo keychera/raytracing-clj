@@ -1,9 +1,9 @@
 (ns realm.raytracing
   (:require
    [clj-async-profiler.core :as prof]
-   [clojure.java.io :as io]
-   [clojure.math :as math]
+   [clojure.java.io :as io] 
    #_[criterium.core :as criterium]
+   [realm.rng :refer [rand-double]]
    [realm.vec3])
   (:import [realm.vec3 Realm]))
 
@@ -287,9 +287,9 @@
                  (do (.vec3 realm (i> ::pixel-color) 0.0 0.0 0.0)
                      (dotimes [_ samples-per-px]
                        (.copy realm (i> ::sample) (i> ::pixel-00))
-                       (.mult realm (i> ::temp)   (i> ::pixel-du) (+ i (- (math/random) 0.5)))
+                       (.mult realm (i> ::temp)   (i> ::pixel-du) (+ i (rand-double -0.5 0.5)))
                        (.add  realm (i> ::sample) (i> ::sample)   (i> ::temp))
-                       (.mult realm (i> ::temp)   (i> ::pixel-dv) (+ j (- (math/random) 0.5)))
+                       (.mult realm (i> ::temp)   (i> ::pixel-dv) (+ j (rand-double -0.5 0.5)))
                        (.add  realm (i> ::sample) (i> ::sample)   (i> ::temp))
 
                        (.copy realm (i> ::ray-origin) (i> ::camera-center))
