@@ -163,8 +163,15 @@
   (scatter [_this realm ray-origin ray-direction hit-point hit-normal rec attenuation]
     (let [ri (if (hit-front-face? rec) (/ 1.0 refractionIndex) refractionIndex)]
       ;; we had temp vector bug again here, this programming model sucks (we know)
-      (.unitVec3 realm ray-direction ray-direction) ;; unit-direction
-      (.refract realm ray-direction ray-direction hit-normal ri))
+      (.unitVec3 realm ray-direction ray-direction)  ;; unit-direction
+      (.mult realm ray-direction ray-direction -1.0) ;; some maneuver to avoid temp, used once for dot
+      (let [cos-theta    (min (.dot realm ray-direction hit-normal) 1.0)
+            sin-theta    (Math/sqrt (- 1.0 (* cos-theta cos-theta)))
+            not-refract? (> (* ri sin-theta) 1.0)]
+        (.mult realm ray-direction ray-direction -1.0) ;; temp maneuver end, return back to positive
+        (if not-refract?
+          (.reflect realm ray-direction ray-direction hit-normal)
+          (.refract realm ray-direction ray-direction hit-normal ri))))
 
     (.copy realm ray-origin hit-point)
     (.vec3 realm attenuation 1.0 1.0 1.0)
@@ -256,7 +263,7 @@
                        (.vec3 realm circle-i -1.0 0.0 -1.0)
                        #_(.vec3 realm albedo-i 0.8 0.8 0.8)
                        {::hittable (Sphere. circle-i 0.5)
-                        ::material (Dielectric. 1.50)})
+                        ::material (Dielectric. (/ 1.0 1.33))})
         right        (let [circle-i (i> ::sphere-4)
                            albedo-i (i> ::right-color)]
                        (.vec3 realm circle-i 1.0 0.0 -1.0)
