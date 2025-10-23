@@ -40,8 +40,12 @@
                   ::pixel-00])
 (def world       [::sphere-1
                   ::sphere-2
+                  ::sphere-3
+                  ::sphere-4
                   ::ground-color
-                  ::center-color])
+                  ::center-color
+                  ::left-color
+                  ::right-color])
 (def loop-vecs   [::sample
                   ::ray-origin
                   ::ray-direction
@@ -61,7 +65,8 @@
 (def all-vector-i (concat global-vecs world loop-vecs temporaries))
 
 (defmacro i> [k]
-  (let [im (create-i> all-vector-i pixel-count) v (im k)] v))
+  (let [im (create-i> all-vector-i pixel-count) v (im k)] 
+    (or v (throw (ex-info (str "key " k " is not created yet") {:key k})))))
 
 ;; macro to avoid reflection
 (defmacro rayAt [realm target-i origin-i direction-i t]
@@ -110,6 +115,14 @@
   (scatter [_this realm ray-origin ray-direction hit-point hit-normal attenuation]
     (.randUnitVec3 realm ray-direction)
     (.add  realm ray-direction ray-direction hit-normal)
+    (.copy realm ray-origin hit-point)
+    (.copy realm attenuation albedo)
+    true))
+
+(deftype Metal [^long albedo]
+  Material
+  (scatter [_this realm ray-origin ray-direction hit-point hit-normal attenuation]
+    (.reflect realm ray-direction ray-direction hit-normal)
     (.copy realm ray-origin hit-point)
     (.copy realm attenuation albedo)
     true))
@@ -169,9 +182,8 @@
                         b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
                     (.vec3 realm (i> ::temp) r g b)
                     (.multVec3 realm target target (i> ::temp)))))))))))
-
 (comment
-  (require '[clj-java-decompiler.core :refer [decompile]])
+  (require '[clj-java-decompiler.core :refer [decompile]]) 
 
   (binding [*compiler-options* {:disable-locals-clearing false}]
     (spit ".zzz/This.java"
@@ -185,20 +197,32 @@
 
 (defn -main []
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
-        ^Realm realm (Realm. (make-array Double/TYPE realm-size))
+        ^Realm realm (Realm. (make-array Double/TYPE realm-size) (i> ::temp))
         center       (let [circle-i (i> ::sphere-1)
                            albedo-i (i> ::center-color)]
-                       (.vec3 realm circle-i 0.0 0.0 -1.0)
+                       (.vec3 realm circle-i 0.0 0.0 -1.2)
                        (.vec3 realm albedo-i 0.1 0.2 0.5)
                        {::hittable (Sphere. circle-i 0.5)
                         ::material (Lambertian. albedo-i)})
         ground       (let [circle-i (i> ::sphere-2)
                            albedo-i (i> ::ground-color)]
                        (.vec3 realm circle-i 0.0 -100.5 -1.0)
-                       (.vec3 realm albedo-i 0.5 0.5 0.5)
+                       (.vec3 realm albedo-i 0.8 0.8 0.0)
                        {::hittable (Sphere. circle-i 100.0)
                         ::material (Lambertian. albedo-i)})
-        hittables    [center ground]]
+        left         (let [circle-i (i> ::sphere-3)
+                           albedo-i (i> ::left-color)]
+                       (.vec3 realm circle-i -1.0 0.0 -1.0)
+                       (.vec3 realm albedo-i 0.8 0.8 0.8)
+                       {::hittable (Sphere. circle-i 0.5)
+                        ::material (Metal. albedo-i)})
+        right        (let [circle-i (i> ::sphere-4)
+                           albedo-i (i> ::right-color)]
+                       (.vec3 realm circle-i 1.0 0.0 -1.0)
+                       (.vec3 realm albedo-i 0.8 0.6 0.2)
+                       {::hittable (Sphere. circle-i 0.5)
+                        ::material (Metal. albedo-i)})
+        hittables    [center ground left right]]
 
     ;; (prof/start)
 

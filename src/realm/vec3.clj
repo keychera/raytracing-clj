@@ -30,6 +30,8 @@
   (rand [^long target ^double vmin ^double vmax])
   (randUnitVec3 [^long target])
   (randOnHemisphere [^long target ^long normal])
+  ;; light
+  (reflect [^long target ^long v ^long normal])
   ;; take
   (read [^long i]))
 
@@ -45,7 +47,7 @@
 (defn rand-double ^double [^double vmin ^double vmax]
   (+ vmin (* (- vmax vmin) (math/random))))
 
-(deftype Realm [^doubles realm]
+(deftype Realm [^doubles realm ^long temp-i]
   Vec3Ops
   (vec3 [_ target u0 u1 u2]
     (doto realm
@@ -58,7 +60,9 @@
   (z [_ i] (aget realm (+ 2 i)))
 
   (lengthSquared [this v]
-    (let [x (.x this v) y (.y this v) z (.z this v)]
+    (let [x (.x this v)
+          y (.y this v)
+          z (.z this v)]
       (+ (* x x) (* y y) (* z z))))
 
   (length [this v]
@@ -88,8 +92,12 @@
     (operator-scalar / this target v scalar))
 
   (cross [this target u v]
-    (let [u0 (.x this u) u1 (.y this u) u2 (.z this u)
-          v0 (.x this v) v1 (.y this v) v2 (.z this v)]
+    (let [u0 (.x this u)
+          u1 (.y this u)
+          u2 (.z this u)
+          v0 (.x this v)
+          v1 (.y this v)
+          v2 (.z this v)]
       (.vec3 this target
              (- (* u1 v2) (* u2 v1))
              (- (* u2 v0) (* u0 v2))
@@ -105,7 +113,9 @@
     (.vec3 this target (rand-double vmin vmax) (rand-double vmin vmax) (rand-double vmin vmax)))
 
   (randUnitVec3 [this target]
-    (loop [x (rand-double -1.0 1.0) y (rand-double -1.0 1.0) z (rand-double -1.0 1.0)]
+    (loop [x (rand-double -1.0 1.0)
+           y (rand-double -1.0 1.0)
+           z (rand-double -1.0 1.0)]
       (let [lensq (+ (* x x) (* y y) (* z z))]
         (if (and (> lensq 1e-160) (<= lensq 1.0))
           (do (.vec3 this target x y z)
@@ -117,6 +127,16 @@
     (when (<= (.dot this target normal) 0.0)
       (.mult this target target -1.0)))
 
+  (reflect [this target v n]
+     ;; bug prone stuff again
+     ;; since all the args are mutable, if they are the same array
+     ;; all hell break loose
+    (let [dot-product (* 2.0 (.dot this v n))]
+      (.mult this temp-i n dot-product) ;; temp-i = n * 2*dot(v,n)
+      (.subt this temp-i temp-i v)      ;; temp-i = (n * 2*dot(v,n)) - v
+      (.mult this target temp-i -1.0))  ;; target = temp-i * -1
+    )
+  
   (read [this i] [(.x this i) (.y this i) (.z this i)]))
 
 
