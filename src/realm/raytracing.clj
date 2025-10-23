@@ -140,27 +140,35 @@
               (HitRecord. -1.0 nil))))))
 
     (rayColor [this realm hittables target ray-origin ray-direction depth]
-      (if (<= depth 0)
-        (.vec3 realm target 0.0 0.0 0.0)
-        (let [hit-record (.hitAnything this realm hittables
-                                       ray-origin ray-direction 1e-3 ##Inf)]
-          (if (> (.t hit-record) 0.0)
-            (let [got-hit       (.gotHit hit-record)
-                  ^Material mat (::material got-hit)
-                  scattered?    (when mat
-                                  (.scatter mat realm ray-origin ray-direction
-                                            (i> ::hit-point) (i> ::hit-normal) (i> ::attenuation)))]
-              (if scattered?
-                (do (.rayColor this realm hittables target ray-origin ray-direction (- depth 1))
-                    (.multVec3 realm target target (i> ::attenuation)))
-                (.vec3 realm target 0.0 0.0 0.0)))
-            (do (.unitVec3 realm (i> ::temp) ray-direction)
-                (let [y (.y realm (i> ::temp))
-                      a (* 0.5 (+ y 1.0))
-                      r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-                      g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-                      b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-                  (.vec3 realm target r g b)))))))))
+      (.vec3 realm target 1.0 1.0 1.0) ;; this is important, the initial accumulated value
+      (loop [depth depth]
+        (if (<= depth 0)
+          (.vec3 realm target 0.0 0.0 0.0)
+          (let [hit-record (.hitAnything this realm hittables
+                                         ray-origin ray-direction 1e-3 ##Inf)]
+            (if (> (.t hit-record) 0.0)
+              #_hittingSomething
+              (let [got-hit       (.gotHit hit-record)
+                    ^Material mat (::material got-hit)
+                    scattered?    (when mat
+                                    (.scatter mat realm ray-origin ray-direction
+                                              (i> ::hit-point) (i> ::hit-normal) (i> ::attenuation)))]
+                ;; .scatter is expected to mutate ray-origin and ray-direction
+                ;; when recur, the new loop will follow the scattered ray, getting new attenuation if hitAnything
+                ;; or getting the color of the sky
+                (if scattered?
+                  (do (.multVec3 realm target target (i> ::attenuation))
+                      (recur (- depth 1)))
+                  (.vec3 realm target 0.0 0.0 0.0)))
+              #_theSky
+              (do (.unitVec3 realm (i> ::temp) ray-direction)
+                  (let [y (.y realm (i> ::temp))
+                        a (* 0.5 (+ y 1.0))
+                        r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                        g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                        b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+                    (.vec3 realm (i> ::temp) r g b)
+                    (.multVec3 realm target target (i> ::temp)))))))))))
 
 (comment
   (require '[clj-java-decompiler.core :refer [decompile]])
