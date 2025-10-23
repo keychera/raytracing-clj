@@ -1,7 +1,7 @@
 (ns realm.raytracing
   (:require
    [clj-async-profiler.core :as prof]
-   [clojure.java.io :as io] 
+   [clojure.java.io :as io]
    #_[criterium.core :as criterium]
    [realm.rng :refer [rand-double]]
    [realm.vec3])
@@ -73,20 +73,27 @@
   `(do (.mult ^realm.vec3.Realm ~realm ~target-i ~direction-i ~t)
        (.add  ^realm.vec3.Realm ~realm ~target-i ~target-i ~origin-i)))
 
-(deftype HitRecord
-         [^double t
-          ^boolean isFrontFace])
+
+(defmacro hitRec
+  ([] `(double-array 2))
+  ([rec t front-face?]
+   `(do (aset ^doubles ~rec 0 ~t)
+        (aset ^doubles ~rec 1 ~(if front-face? `1.0 `-1.0))
+        ~rec)))
+
+(defmacro hit-t [rec] `(aget ^doubles ~rec 0))
+(defmacro hit-front-face? [rec] `(> (aget ^doubles ~rec 1) 0.0))
 
 (deftype WhatGotHit
          [^clojure.lang.IPersistentMap gotHit
-          ^HitRecord rec])
+          ^doubles rec])
 
 (definterface Hittable
-  (^realm.raytracing.HitRecord hit [^realm.vec3.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max]))
+  (^doubles hit [^realm.vec3.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max ^doubles rec]))
 
 (deftype Sphere [^long center-i ^double radius]
   Hittable
-  (hit [_this realm ray-origin ray-direction t-min t-max]
+  (hit [_this realm ray-origin ray-direction t-min t-max rec]
     (.subt realm (i> ::temp) center-i ray-origin)
     (let [a (.lengthSquared realm ray-direction)
           h (.dot realm ray-direction (i> ::temp))
@@ -111,8 +118,8 @@
                   (let [dot-product (.dot realm ray-direction (i> ::hit-normal))]
                     (if (>= dot-product 0.0) ;; not front-face, written like this to avoid reflection
                       (do (.mult realm (i> ::hit-normal) (i> ::hit-normal) -1.0)
-                          (HitRecord. root false))
-                      (HitRecord. root true)))))))))
+                          (hitRec rec root false))
+                      (hitRec rec root true)))))))))
     #_"this mutates ::hit-normal and ::hit-point"))
 
 
@@ -125,7 +132,7 @@
     ^long ray-direction
     ^long hit-point
     ^long hit-normal
-    ^realm.raytracing.HitRecord rec
+    ^doubles rec
     ^long attenuation]))
 
 (deftype Lambertian [^long albedo]
@@ -154,7 +161,7 @@
 (deftype Dielectric [^double refractionIndex]
   Material
   (scatter [_this realm ray-origin ray-direction hit-point hit-normal rec attenuation]
-    (let [ri (if (.isFrontFace rec) (/ 1.0 refractionIndex) refractionIndex)]
+    (let [ri (if (hit-front-face? rec) (/ 1.0 refractionIndex) refractionIndex)]
       ;; we had temp vector bug again here, this programming model sucks (we know)
       (.unitVec3 realm ray-direction ray-direction) ;; unit-direction
       (.refract realm ray-direction ray-direction hit-normal ri))
@@ -165,55 +172,57 @@
 
 (definterface Ray
   (^realm.raytracing.WhatGotHit hitAnything
-   [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max])
+   [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max ^doubles rec])
   (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction ^long depth]))
 
 (def a-ray
   (reify Ray
-    (hitAnything [_this realm hittables ray-origin ray-direction t-min t-max]
+    (hitAnything [_this realm hittables ray-origin ray-direction t-min t-max rec]
       (let [length (count hittables)]
         (loop [i 0 closest-so-far t-max last-hit nil last-rec nil]
           (if (< i length)
             (let [got-hit   (nth hittables i)
                   ^Hittable hittable (::hittable got-hit)
-                  rec       (.hit hittable realm ray-origin ray-direction t-min closest-so-far)]
+                  rec       (.hit hittable realm ray-origin ray-direction t-min closest-so-far rec)]
               (if rec
-                (recur (inc i) (.t rec) got-hit rec)
+                (recur (inc i) (hit-t rec) got-hit rec)
                 (recur (inc i) closest-so-far last-hit last-rec)))
             (when (some? last-hit)
               (WhatGotHit. last-hit last-rec))))))
 
     (rayColor [this realm hittables target ray-origin ray-direction depth]
       (.vec3 realm target 1.0 1.0 1.0) ;; this is important, the initial accumulated value
-      (loop [depth depth]
-        (if (<= depth 0)
-          (.vec3 realm target 0.0 0.0 0.0)
-          (let [what-got-hit (.hitAnything this realm hittables
-                                           ray-origin ray-direction 1e-3 ##Inf)]
-            (if what-got-hit
-              #_hittingSomething
-              (let [got-hit       (.gotHit what-got-hit)
-                    rec           (.rec what-got-hit)
-                    ^Material mat (::material got-hit)
-                    scattered?    (when mat
-                                    (.scatter mat realm ray-origin ray-direction
-                                              (i> ::hit-point) (i> ::hit-normal) rec (i> ::attenuation)))]
-                ;; .scatter is expected to mutate ray-origin and ray-direction
-                ;; when recur, the new loop will follow the scattered ray, getting new attenuation if hitAnything
-                ;; or getting the color of the sky
-                (if scattered?
-                  (do (.multVec3 realm target target (i> ::attenuation))
-                      (recur (- depth 1)))
-                  (.vec3 realm target 0.0 0.0 0.0)))
-              #_theSky
-              (do (.unitVec3 realm (i> ::temp) ray-direction)
-                  (let [y (.y realm (i> ::temp))
-                        a (* 0.5 (+ y 1.0))
-                        r (+ (* (- 1.0 a) 1.0) (* a 0.5))
-                        g (+ (* (- 1.0 a) 1.0) (* a 0.7))
-                        b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
-                    (.vec3 realm (i> ::temp) r g b)
-                    (.multVec3 realm target target (i> ::temp)))))))))))
+      (let [rec (hitRec)]
+        (loop [depth depth]
+          (if (<= depth 0)
+            (.vec3 realm target 0.0 0.0 0.0)
+            (let [what-got-hit (.hitAnything this realm hittables
+                                             ray-origin ray-direction 1e-3 ##Inf rec)]
+              (if what-got-hit
+                #_hittingSomething
+                (let [got-hit       (.gotHit what-got-hit)
+                      rec           (.rec what-got-hit)
+                      ^Material mat (::material got-hit)
+                      scattered?    (when mat
+                                      (.scatter mat realm ray-origin ray-direction
+                                                (i> ::hit-point) (i> ::hit-normal) rec (i> ::attenuation)))]
+                  ;; .scatter is expected to mutate ray-origin and ray-direction
+                  ;; when recur, the new loop will follow the scattered ray, getting new attenuation if hitAnything
+                  ;; or getting the color of the sky
+                  (if scattered?
+                    (do (.multVec3 realm target target (i> ::attenuation))
+                        (recur (- depth 1)))
+                    (.vec3 realm target 0.0 0.0 0.0)))
+                #_theSky
+                (do (.unitVec3 realm (i> ::temp) ray-direction)
+                    (let [y (.y realm (i> ::temp))
+                          a (* 0.5 (+ y 1.0))
+                          r (+ (* (- 1.0 a) 1.0) (* a 0.5))
+                          g (+ (* (- 1.0 a) 1.0) (* a 0.7))
+                          b (+ (* (- 1.0 a) 1.0) (* a 1.0))]
+                      (.vec3 realm (i> ::temp) r g b)
+                      (.multVec3 realm target target (i> ::temp))))))))))))
+
 (comment
   (require '[clj-java-decompiler.core :refer [decompile]])
 
@@ -256,7 +265,7 @@
                         ::material (Metal. albedo-i 1.0)})
         hittables    [center ground left right]]
 
-    ;; (prof/start)
+    (prof/start #_{:event :alloc})
 
     (time #_criterium/bench
      (do (doto realm
@@ -302,7 +311,7 @@
                      (recur j (+ i 1.0)))
                  (recur (+ j 1.0) 0.0)))))))
 
-    ;; (prof/stop)
+    (prof/stop)
 
     (let [image-height (int image-height)
           image-width (int image-width)]
