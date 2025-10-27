@@ -245,6 +245,10 @@
 (defn linear->gamma ^double [^double component]
   (if (> component 0.0) (Math/sqrt component) 0.0))
 
+(defmacro init-typed-array [array element-type & elements]
+  `(do ~@(for [[i e] (map-indexed vector elements)]
+            `(aset ~(vary-meta array assoc :tag (str "[L" element-type ";")) ~i ~e))))
+
 (defn -main []
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
         ^Realm realm (Realm. (make-array Double/TYPE realm-size) (i> ::temp))
@@ -271,12 +275,10 @@
                        (.vec3 realm circle-i 1.0 0.0 -1.0)
                        (.vec3 realm albedo-i 0.8 0.6 0.2)
                        (Entity. (Sphere. circle-i 0.5)
-                                (Metal. albedo-i 1.0)))
-        ^"[Lrealm.raytracing.Entity;" hittables (make-array realm.raytracing.Entity 4)
-        _ (do (aset hittables 0 center)
-              (aset hittables 1 ground)
-              (aset hittables 2 left)
-              (aset hittables 3 right))]
+                                (Metal. albedo-i 1.0))) 
+        hittables (make-array realm.raytracing.Entity 4)
+        _ (init-typed-array hittables realm.raytracing.Entity
+                            center ground left right)]
 
     #_(prof/start #_{:event :alloc})
 
