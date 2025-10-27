@@ -1,6 +1,6 @@
 (ns realm.raytracing
   (:require
-   [clj-async-profiler.core :as prof]
+   #_[clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
    #_[criterium.core :as criterium]
    [realm.rng :refer [rand-double]]
@@ -83,10 +83,6 @@
 
 (defmacro hit-t [rec] `(aget ^doubles ~rec 0))
 (defmacro hit-front-face? [rec] `(> (aget ^doubles ~rec 1) 0.0))
-
-(deftype WhatGotHit
-         [^clojure.lang.IPersistentMap gotHit
-          ^doubles rec])
 
 (definterface Hittable
   (^doubles hit [^realm.vec3.Realm realm ^long ray-origin ^long ray-direction ^double t-min ^double t-max ^doubles rec]))
@@ -177,19 +173,25 @@
     (.vec3 realm attenuation 1.0 1.0 1.0)
     true))
 
+(deftype Entity [^Hittable hittable ^Material material])
+
+(deftype WhatGotHit
+         [^realm.raytracing.Entity gotHit
+          ^doubles rec])
+
 (definterface Ray
   (^realm.raytracing.WhatGotHit hitAnything
-   [^realm.vec3.Realm realm hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max ^doubles rec])
-  (rayColor [^realm.vec3.Realm realm hittables ^long target ^long ray-origin ^long ray-direction ^long depth]))
+   [^realm.vec3.Realm realm ^"[Lrealm.raytracing.Entity;" hittables ^long ray-origin ^long ray-direction ^double t-min ^double t-max ^doubles rec])
+  (rayColor [^realm.vec3.Realm realm ^"[Lrealm.raytracing.Entity;" hittables ^long target ^long ray-origin ^long ray-direction ^long depth]))
 
 (def a-ray
   (reify Ray
-    (hitAnything [_this realm hittables ray-origin ray-direction t-min t-max rec]
+    (hitAnything [_this realm  hittables ray-origin ray-direction t-min t-max rec]
       (let [length (count hittables)]
         (loop [i 0 closest-so-far t-max last-hit nil last-rec nil]
           (if (< i length)
-            (let [got-hit   (nth hittables i)
-                  ^Hittable hittable (::hittable got-hit)
+            (let [^realm.raytracing.Entity got-hit   (aget hittables i)
+                  ^Hittable hittable (.hittable got-hit)
                   rec       (.hit hittable realm ray-origin ray-direction t-min closest-so-far rec)]
               (if rec
                 (recur (inc i) (hit-t rec) got-hit rec)
@@ -203,13 +205,13 @@
         (loop [depth depth]
           (if (<= depth 0)
             (.vec3 realm target 0.0 0.0 0.0)
-            (let [what-got-hit (.hitAnything this realm hittables
-                                             ray-origin ray-direction 1e-3 ##Inf rec)]
+            (let [^realm.raytracing.WhatGotHit what-got-hit (.hitAnything this realm hittables
+                                                                          ray-origin ray-direction 1e-3 ##Inf rec)]
               (if what-got-hit
                 #_hittingSomething
-                (let [got-hit       (.gotHit what-got-hit)
+                (let [^realm.raytracing.Entity got-hit (.gotHit what-got-hit)
                       rec           (.rec what-got-hit)
-                      ^Material mat (::material got-hit)
+                      ^Material mat (.material got-hit)
                       scattered?    (when mat
                                       (.scatter mat realm ray-origin ray-direction
                                                 (i> ::hit-point) (i> ::hit-normal) rec (i> ::attenuation)))]
@@ -250,29 +252,33 @@
                            albedo-i (i> ::center-color)]
                        (.vec3 realm circle-i 0.0 0.0 -1.2)
                        (.vec3 realm albedo-i 0.1 0.2 0.5)
-                       {::hittable (Sphere. circle-i 0.5)
-                        ::material (Lambertian. albedo-i)})
+                       (Entity. (Sphere. circle-i 0.5)
+                                (Lambertian. albedo-i)))
         ground       (let [circle-i (i> ::sphere-2)
                            albedo-i (i> ::ground-color)]
                        (.vec3 realm circle-i 0.0 -100.5 -1.0)
                        (.vec3 realm albedo-i 0.8 0.8 0.0)
-                       {::hittable (Sphere. circle-i 100.0)
-                        ::material (Lambertian. albedo-i)})
+                       (Entity. (Sphere. circle-i 100.0)
+                                (Lambertian. albedo-i)))
         left         (let [circle-i (i> ::sphere-3)
                            #_#_albedo-i (i> ::left-color)]
                        (.vec3 realm circle-i -1.0 0.0 -1.0)
                        #_(.vec3 realm albedo-i 0.8 0.8 0.8)
-                       {::hittable (Sphere. circle-i 0.5)
-                        ::material (Dielectric. (/ 1.0 1.33))})
+                       (Entity. (Sphere. circle-i 0.5)
+                                (Dielectric. (/ 1.0 1.33))))
         right        (let [circle-i (i> ::sphere-4)
                            albedo-i (i> ::right-color)]
                        (.vec3 realm circle-i 1.0 0.0 -1.0)
                        (.vec3 realm albedo-i 0.8 0.6 0.2)
-                       {::hittable (Sphere. circle-i 0.5)
-                        ::material (Metal. albedo-i 1.0)})
-        hittables    [center ground left right]]
+                       (Entity. (Sphere. circle-i 0.5)
+                                (Metal. albedo-i 1.0)))
+        ^"[Lrealm.raytracing.Entity;" hittables (make-array realm.raytracing.Entity 4)
+        _ (do (aset hittables 0 center)
+              (aset hittables 1 ground)
+              (aset hittables 2 left)
+              (aset hittables 3 right))]
 
-    (prof/start #_{:event :alloc})
+    #_(prof/start #_{:event :alloc})
 
     (time #_criterium/bench
      (do (doto realm
@@ -318,7 +324,7 @@
                      (recur j (+ i 1.0)))
                  (recur (+ j 1.0) 0.0)))))))
 
-    (prof/stop)
+    #_(prof/stop)
 
     (let [image-height (int image-height)
           image-width (int image-width)]
