@@ -23,17 +23,9 @@
 (def samples-per-px  100)
 (def max-depth       50)
 (def pixel-scale     (/ 1.0 (double samples-per-px)))
+(def pixel-count     (int (* ^double image-width ^double image-height)))
 
 (defn deg->rad ^double [^double d] (-> d (* Math/PI) (/ 180.0)))
-
-(def vfov 90.0)
-
-(def focal-length    1.0)
-(def theta           (deg->rad vfov))
-(def h               (Math/tan (/ ^double theta 2.0)))
-(def viewport-height (* 2.0 ^double h ^double focal-length))
-(def viewport-width  (* ^double viewport-height (/ ^double image-width ^double  image-height)))
-(def pixel-count     (int (* ^double image-width ^double image-height)))
 
 ;; header, is this c?
 (def global-vecs [::camera-center
@@ -43,6 +35,12 @@
                   ::pixel-dv
                   ::U-L
                   ::pixel-00])
+(def camera      [::look-from
+                  ::look-at
+                  ::vup
+                  ::u
+                  ::v
+                  ::w])
 (def world       [::sphere-1
                   ::sphere-2
                   ::sphere-3
@@ -67,7 +65,7 @@
 ;; Ray.raycolor mutate argument target, ray-origin, ray-direction, and ::temp...
 ;; do we only need one ::temp ? cannot be, let's see
 
-(def all-vector-i (concat global-vecs world loop-vecs temporaries))
+(def all-vector-i (concat global-vecs camera world loop-vecs temporaries))
 
 (defmacro i> [k]
   (let [im (create-i> all-vector-i pixel-count) v (im k)]
@@ -254,47 +252,43 @@
            `(aset ~(vary-meta array assoc :tag (str "[L" element-type ";")) ~i ~e))))
 
 (defmacro put-vec3 [realm i x y z]
-  `(do (.vec3 ~realm ~i ~x ~y ~z) 
+  `(do (.vec3 ~realm ~i ~x ~y ~z)
        ~i))
 
 (defn -main []
-  (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
-        ^Realm realm (Realm. (make-array Double/TYPE realm-size))
-        hittables    (make-array realm.raytracing.Entity 2)
-        R            (Math/cos (/ Math/PI 4.0))] 
+  (let [realm-size      (* (+ ^long pixel-count (count all-vector-i)) 3)
+        ^Realm realm    (Realm. (make-array Double/TYPE realm-size))
+        hittables       (make-array realm.raytracing.Entity 4)
+        vfov            90.0
+
+        look-from       (put-vec3 realm (i> ::look-from) 0.0 0.0 0.0)
+        look-at         (put-vec3 realm (i> ::look-at) 0.0 0.0 -1.0)
+        vup             (put-vec3 realm (i> ::vup) 0.0 1.0 0.0)
+
+        focal-length    1.0
+        theta           (deg->rad vfov)
+        h               (Math/tan (/ ^double theta 2.0))
+        viewport-height (* 2.0 ^double h ^double focal-length)
+        viewport-width  (* ^double viewport-height (/ ^double image-width ^double  image-height))
+
+
+        #_#_R           (Math/cos (/ Math/PI 4.0))]
 
     (init-typed-array
-     hittables realm.raytracing.Entity 
-     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-1) (- R) 0.0 -1.0) R) 
-              (Lambertian. (put-vec3 realm (i> ::left-color) 0.0 0.0 1.0)))
-     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-2) R 0.0 -1.0) R)
-              (Lambertian. (put-vec3 realm (i> ::right-color) 1.0 0.0 0.0)))
+     hittables realm.raytracing.Entity
+     #_(Entity. (Sphere.     (put-vec3 realm (i> ::sphere-1) (- R) 0.0 -1.0) R)
+                (Lambertian. (put-vec3 realm (i> ::left-color) 0.0 0.0 1.0)))
+     #_(Entity. (Sphere.     (put-vec3 realm (i> ::sphere-2) R 0.0 -1.0) R)
+                (Lambertian. (put-vec3 realm (i> ::right-color) 1.0 0.0 0.0)))
 
-     #_#_#_#_
-     (let [circle-i (i> ::sphere-1)
-           albedo-i (i> ::center-color)]
-       (.vec3 realm circle-i 0.0 0.0 -1.2)
-       (.vec3 realm albedo-i 0.1 0.2 0.5)
-       (Entity. (Sphere. circle-i 0.5)
-                (Lambertian. albedo-i)))
-     (let [circle-i (i> ::sphere-2)
-           albedo-i (i> ::ground-color)]
-       (.vec3 realm circle-i 0.0 -100.5 -1.0)
-       (.vec3 realm albedo-i 0.8 0.8 0.0)
-       (Entity. (Sphere. circle-i 100.0)
-                (Lambertian. albedo-i)))
-     (let [circle-i (i> ::sphere-3)
-           #_#_albedo-i (i> ::left-color)]
-       (.vec3 realm circle-i -1.0 0.0 -1.0)
-       #_(.vec3 realm albedo-i 0.8 0.8 0.8)
-       (Entity. (Sphere. circle-i 0.5)
-                (Dielectric. (/ 1.0 1.33)))) 
-     (let [circle-i (i> ::sphere-4)
-           albedo-i (i> ::right-color)]
-       (.vec3 realm circle-i 1.0 0.0 -1.0)
-       (.vec3 realm albedo-i 0.8 0.6 0.2)
-       (Entity. (Sphere. circle-i 0.5)
-                (Metal. albedo-i 1.0))))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-1) 0.0 0.0 -1.2) 0.5)
+              (Lambertian. (put-vec3 realm (i> ::center-color) 0.1 0.2 0.5)))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-2) 0.0 -100.5 -1.0) 100.0)
+              (Lambertian. (put-vec3 realm (i> ::ground-color) 0.8 0.8 0.0)))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-3) -1.0 0.0 -1.0) 0.5)
+              (Dielectric. (/ 1.0 1.33)))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-4) 1.0 0.0 -1.0) 0.5)
+              (Metal.      (put-vec3 realm (i> ::right-color) 0.8 0.6 0.2) 1.0)))
 
     #_(prof/start #_{:event :alloc})
 
