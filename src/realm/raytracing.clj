@@ -45,6 +45,7 @@
                   ::sphere-2
                   ::sphere-3
                   ::sphere-4
+                  ::sphere-5
                   ::ground-color
                   ::center-color
                   ::left-color
@@ -258,21 +259,28 @@
 (defn -main []
   (let [realm-size      (* (+ ^long pixel-count (count all-vector-i)) 3)
         ^Realm realm    (Realm. (make-array Double/TYPE realm-size))
-        hittables       (make-array realm.raytracing.Entity 4)
+        hittables       (make-array realm.raytracing.Entity 5)
+        
         vfov            90.0
+        _               (.vec3 realm (i> ::look-from) -2.0 2.0 1.0)
+        _               (.vec3 realm (i> ::look-at)   0.0 0.0 -1.0)
+        _               (.vec3 realm (i> ::vup)       0.0 1.0 0.0)
+        _               (.copy realm (i> ::camera-center) (i> ::look-from))
 
-        look-from       (put-vec3 realm (i> ::look-from) 0.0 0.0 0.0)
-        look-at         (put-vec3 realm (i> ::look-at) 0.0 0.0 -1.0)
-        vup             (put-vec3 realm (i> ::vup) 0.0 1.0 0.0)
+        _               (.subt realm (i> ::temp) (i> ::look-from) (i> ::look-at))
+        focal-length    (.length realm (i> ::temp))
+        _               (.unitVec3 realm (i> ::w) (i> ::temp))
+        _               (.cross realm    (i> ::temp) (i> ::vup) (i> ::w))
+        _               (.unitVec3 realm (i> ::u) (i> ::temp))
+        _               (.cross realm (i> ::v) (i> ::w) (i> ::u))
 
-        focal-length    1.0
         theta           (deg->rad vfov)
         h               (Math/tan (/ ^double theta 2.0))
         viewport-height (* 2.0 ^double h ^double focal-length)
         viewport-width  (* ^double viewport-height (/ ^double image-width ^double  image-height))
 
-
-        #_#_R           (Math/cos (/ Math/PI 4.0))]
+        #_#_R           (Math/cos (/ Math/PI 4.0))] 
+    
 
     (init-typed-array
      hittables realm.raytracing.Entity
@@ -286,22 +294,23 @@
      (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-2) 0.0 -100.5 -1.0) 100.0)
               (Lambertian. (put-vec3 realm (i> ::ground-color) 0.8 0.8 0.0)))
      (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-3) -1.0 0.0 -1.0) 0.5)
-              (Dielectric. (/ 1.0 1.33)))
-     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-4) 1.0 0.0 -1.0) 0.5)
+              (Dielectric. 1.50))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-4) -1.0 0.0 -1.0) 0.4)
+              (Dielectric. (/ 1.0 1.50)))
+     (Entity. (Sphere.     (put-vec3 realm (i> ::sphere-5) 1.0 0.0 -1.0) 0.5)
               (Metal.      (put-vec3 realm (i> ::right-color) 0.8 0.6 0.2) 1.0)))
 
     #_(prof/start #_{:event :alloc})
 
     (time #_criterium/bench
      (do (doto realm
-           (.vec3 (i> ::camera-center) 0.0 0.0 0.0)
-           (.vec3 (i> ::viewport-u) viewport-width 0.0 0.0)
-           (.vec3 (i> ::viewport-v) 0.0 (- ^double viewport-height) 0.0)
+           (.mult (i> ::viewport-u) (i> ::u) viewport-width)
+           (.mult (i> ::viewport-v) (i> ::v) (- ^double viewport-height))
            (.divi (i> ::pixel-du) (i> ::viewport-u) ^double image-width)
            (.divi (i> ::pixel-dv) (i> ::viewport-v) ^double image-height)
 
            ;; multiple operand is complex to represent currently 
-           (.vec3 (i> ::temp) 0.0 0.0 focal-length)
+           (.mult (i> ::temp) (i> ::w) focal-length)
            (.subt (i> ::U-L)  (i> ::camera-center) (i> ::temp))
            (.divi (i> ::temp) (i> ::viewport-u) 2.0)
            (.subt (i> ::U-L)  (i> ::U-L) (i> ::temp))
