@@ -261,7 +261,7 @@
         ^Realm realm    (Realm. (make-array Double/TYPE realm-size))
         hittables       (make-array realm.raytracing.Entity 5)
         
-        vfov            90.0
+        vfov            20.0
         _               (.vec3 realm (i> ::look-from) -2.0 2.0 1.0)
         _               (.vec3 realm (i> ::look-at)   0.0 0.0 -1.0)
         _               (.vec3 realm (i> ::vup)       0.0 1.0 0.0)
