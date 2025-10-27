@@ -1,4 +1,4 @@
-(ns realm.vec3 
+(ns realm.vec3
   (:require
    [realm.rng :refer [rand-double]]))
 
@@ -45,7 +45,7 @@
   `(let [x# (.x ~this ~v) y# (.y ~this ~v) z# (.z ~this ~v)]
      (.vec3 ~this ~target (~op x# ~scalar) (~op y# ~scalar) (~op z# ~scalar))))
 
-(deftype Realm [^doubles realm ^long temp]
+(deftype Realm [^doubles realm]
   Vec3Ops
   (vec3 [_ target u0 u1 u2]
     (doto realm
@@ -126,28 +126,32 @@
       (.mult this target target -1.0)))
 
   (reflect [this target v n]
-    ;; bug prone stuff again
-    ;; since all the args are mutable, if they are the same array
-    ;; all hell break loose
-    (let [dot-product (* 2.0 (.dot this v n))]
-      (.mult this temp n dot-product) ;; temp-i = n * 2*dot(v,n)
-      (.subt this temp temp v)      ;; temp-i = (n * 2*dot(v,n)) - v
-      (.mult this target temp -1.0))  ;; target = temp-i * -1
-    )
+    (let [dot-product (* 2.0 (.dot this v n))
+          xx (- (.x this v) (* (.x this n) dot-product))
+          yy (- (.y this v) (* (.y this n) dot-product))
+          zz (- (.z this v) (* (.z this n) dot-product))]
+      (.vec3 this target xx yy zz)))
 
   (refract [this target uv n etaiOverEtat]
-    (.mult this temp uv -1.0)
-    (let [cos-theta (Math/min (.dot this temp n) 1.0)]
-      (.mult this temp n cos-theta)  ;; r-perp = n * cos-theta
-      (.add  this temp temp uv)      ;; r-perp = (n * cos-theta) + uv
-      (.mult this target temp etaiOverEtat)  ;; target = r-perp * etaiOverEtat  
-      )
-    (let [lensq (.lengthSquared this target)
-          nn    (- (Math/sqrt (Math/abs (- 1.0 lensq))))]
-      (.mult this temp n nn)         ;; r-para = n * -sqrt(abs(1.0 - lensq))
-      (.add this target target temp) ;; r-perp + r-para
-      ))
-
+    (let [uv-x        (.x this uv)
+          uv-y        (.y this uv)
+          uv-z        (.z this uv)
+          n-x         (.x this n)
+          n-y         (.y this n)
+          n-z         (.z this n)
+          dot-product (+ (* (- uv-x) n-x)
+                         (* (- uv-y) n-y)
+                         (* (- uv-z) n-z))
+          cos-theta   (Math/min dot-product 1.0)
+          rperp-x     (* (+ uv-x (* cos-theta n-x)) etaiOverEtat)
+          rperp-y     (* (+ uv-y (* cos-theta n-y)) etaiOverEtat)
+          rperp-z     (* (+ uv-z (* cos-theta n-z)) etaiOverEtat)
+          lensq       (+ (* rperp-x rperp-x) (* rperp-y rperp-y) (* rperp-z rperp-z))
+          nn          (- (Math/sqrt (Math/abs (- 1.0 lensq))))
+          rpara-x     (* n-x nn)
+          rpara-y     (* n-y nn)
+          rpara-z     (* n-z nn)]
+      (.vec3 this target (+ rperp-x rpara-x) (+ rperp-y rpara-y) (+ rperp-z rpara-z))))
 
   (read [this i] [(.x this i) (.y this i) (.z this i)]))
 

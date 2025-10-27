@@ -143,9 +143,8 @@
 (deftype Metal [^long albedo ^double fuzz]
   Material
   (scatter [_this realm ray-origin ray-direction hit-point hit-normal _rec attenuation]
-    (let [temp-i (.temp realm)]
-      (.reflect realm ray-direction ray-direction hit-normal)
-      (.unitVec3 realm ray-direction ray-direction)
+    (let [temp-i (i> ::temp)]
+      (.reflect realm ray-direction ray-direction hit-normal) 
       (.randUnitVec3 realm temp-i)
       (.mult realm temp-i temp-i fuzz)
       (.add  realm ray-direction ray-direction temp-i)
@@ -251,7 +250,7 @@
 
 (defn -main []
   (let [realm-size   (* (+ ^long pixel-count (count all-vector-i)) 3)
-        ^Realm realm (Realm. (make-array Double/TYPE realm-size) (i> ::temp))
+        ^Realm realm (Realm. (make-array Double/TYPE realm-size))
         center       (let [circle-i (i> ::sphere-1)
                            albedo-i (i> ::center-color)]
                        (.vec3 realm circle-i 0.0 0.0 -1.2)
